@@ -1,273 +1,230 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="基础统计分析工具：可编辑表格、自动正态性与方差齐性诊断、相关性、卡方、两独立样本、单因素 ANOVA、非参数与多种事后检验。" />
-  <meta name="theme-color" content="#0d9488" />
-  <title>基础统计分析工具</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="纯前端、本地计算的基础统计分析工具。">
+  <meta name="color-scheme" content="light">
+  <title>基础统计分析工具 v7</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <header class="site-header">
-    <div class="container header-inner">
-      <div class="header-brand">
-        <span class="brand-bold">YDchen</span><span class="brand-light">Tools</span>
+    <div class="shell header-inner">
+      <div>
+        <p class="eyebrow">YDchen Tools · Local-first</p>
+        <h1>基础统计分析工具 <span>v7</span></h1>
+        <p class="subtitle">数据只在当前浏览器处理 · 修复数值解析、CSV、Mann–Whitney 与事后检验问题</p>
       </div>
-      <div class="header-divider" aria-hidden="true"></div>
-      <div class="header-info">
-        <h1>基础统计分析工具</h1>
-        <p class="subtitle">自动诊断 · 参数/非参数 · 多种事后检验 · 精确置换</p>
-      </div>
+      <button id="resetBtn" class="button ghost" type="button">恢复默认</button>
     </div>
   </header>
 
-  <main class="container main-grid">
-    <section class="card settings-card" aria-labelledby="settings-title">
-      <div class="section-heading">
-        <div>
-          <h2 id="settings-title">第 1 步 · 选择分析</h2>
-          <p class="heading-note">默认自动检查分布与方差，但不会强制隐藏其他方法。</p>
-        </div>
-        <button id="resetBtn" class="button button-ghost" type="button">恢复默认</button>
+  <main class="shell main-grid">
+    <section class="card step-card" aria-labelledby="step1Title">
+      <div class="step-heading">
+        <span class="step-number">1</span>
+        <div><h2 id="step1Title">选择分析</h2><p>推断分析固定使用完整观测；缺失值按 0 仅影响描述与分组汇总。</p></div>
       </div>
-
-      <label class="field analysis-field">
-        <span>分析模式</span>
-        <select id="analysisSelect">
-          <option value="overview" selected>数据概览</option>
-          <option value="group">分组汇总</option>
-          <option value="descriptive">描述统计、正态性与方差齐性</option>
-          <option value="correlation">相关性：Pearson + Spearman</option>
-          <option value="chisquare">分类变量：卡方 + 精确置换</option>
-          <option value="independent">两独立样本：t / Welch / Mann–Whitney / 精确置换</option>
-          <option value="anova">多独立组：ANOVA / Welch / Kruskal–Wallis</option>
-        </select>
-      </label>
-
-      <p id="modeDescription" class="mode-description"></p>
-
-      <div class="form-grid">
-        <label id="valueColumnField" class="field hidden">
-          <span>数值字段</span>
-          <select id="valueColumn"></select>
+      <div class="control-grid">
+        <label class="field span-2">
+          <span>分析模式</span>
+          <select id="analysisMode">
+            <option value="overview">数据概览</option>
+            <option value="descriptive">描述与诊断</option>
+            <option value="group-summary">分组汇总</option>
+            <option value="correlation">相关分析</option>
+            <option value="categorical">分类变量关联</option>
+            <option value="two-group">两独立样本</option>
+            <option value="multi-group">多独立组</option>
+          </select>
         </label>
-        <label id="groupColumnField" class="field hidden">
-          <span id="groupColumnLabel">分组字段</span>
-          <select id="groupColumn"></select>
-        </label>
-        <label id="categoryColumnAField" class="field hidden">
-          <span>行变量</span>
-          <select id="categoryColumnA"></select>
-        </label>
-        <label id="categoryColumnBField" class="field hidden">
-          <span>列变量</span>
-          <select id="categoryColumnB"></select>
-        </label>
-        <label id="normalityMethodField" class="field hidden">
-          <span>正态性检验</span>
+        <label class="field" id="normalityField">
+          <span>正态性诊断</span>
           <select id="normalityMethod">
-            <option value="auto" selected>自动推荐（按样本量与数据特征）</option>
-            <option value="shapiro">Shapiro 系列（小样本）</option>
+            <option value="auto">自动选择</option>
+            <option value="shapiro">Shapiro 系列</option>
             <option value="anderson">Anderson–Darling</option>
-            <option value="dagostino">D’Agostino–Pearson K²</option>
+            <option value="dagostino">D’Agostino–Pearson</option>
             <option value="jarque">Jarque–Bera</option>
           </select>
         </label>
-        <label id="varianceMethodField" class="field hidden">
-          <span>方差齐性检验</span>
+        <label class="field" id="varianceField">
+          <span>方差齐性诊断</span>
           <select id="varianceMethod">
-            <option value="auto" selected>自动推荐</option>
-            <option value="brown">Brown–Forsythe（中位数中心）</option>
-            <option value="levene">Levene（均值中心）</option>
-            <option value="bartlett">Bartlett（正态数据）</option>
+            <option value="auto">自动选择</option>
+            <option value="brown">Brown–Forsythe</option>
+            <option value="levene">Levene</option>
+            <option value="bartlett">Bartlett</option>
           </select>
         </label>
-        <label id="correlationMethodField" class="field hidden">
-          <span>相关矩阵显示</span>
+        <label class="field" id="valueField"><span>数值字段</span><select id="valueColumn"></select></label>
+        <label class="field" id="groupField"><span>分组字段</span><select id="groupColumn"></select></label>
+        <label class="field" id="categoryAField"><span>分类字段 A</span><select id="categoryColumnA"></select></label>
+        <label class="field" id="categoryBField"><span>分类字段 B</span><select id="categoryColumnB"></select></label>
+        <label class="field" id="correlationField">
+          <span>相关方法</span>
           <select id="correlationMethod">
-            <option value="auto" selected>自动推荐</option>
-            <option value="pearson">Pearson（参数）</option>
-            <option value="spearman">Spearman（非参数）</option>
+            <option value="auto">自动（同时报告）</option>
+            <option value="pearson">Pearson</option>
+            <option value="spearman">Spearman</option>
           </select>
         </label>
-        <label id="postHocMethodField" class="field hidden">
-          <span>事后检验方法</span>
+        <label class="field" id="postHocField">
+          <span>事后检验</span>
           <select id="postHocMethod">
-            <option value="auto" selected>跟随自动推荐</option>
-            <option value="tukey">Tukey–Kramer HSD</option>
-            <option value="games">Games–Howell</option>
-            <option value="lsd">Fisher LSD</option>
+            <option value="auto">自动</option>
+            <option value="tukey">Tukey–Kramer</option>
+            <option value="games-howell">Games–Howell</option>
+            <option value="fisher-lsd">Fisher LSD</option>
             <option value="pooled">两两 pooled t</option>
             <option value="welch">两两 Welch t</option>
-            <option value="dunn">Dunn 秩检验</option>
-            <option value="mann">两两 Mann–Whitney U</option>
+            <option value="dunn">Dunn</option>
+            <option value="mann-whitney">两两 Mann–Whitney U</option>
           </select>
         </label>
-        <label id="postHocCorrectionField" class="field hidden">
+        <label class="field" id="correctionField">
           <span>多重比较校正</span>
-          <select id="postHocCorrection">
-            <option value="auto" selected>自动推荐</option>
-            <option value="none">不校正</option>
+          <select id="correctionMethod">
             <option value="holm">Holm</option>
             <option value="bonferroni">Bonferroni</option>
             <option value="sidak">Šidák</option>
-            <option value="bh">Benjamini–Hochberg FDR</option>
+            <option value="bh">BH-FDR</option>
+            <option value="none">不校正</option>
           </select>
         </label>
-        <label id="missingModeField" class="field">
-          <span>缺失值处理</span>
+        <label class="field" id="missingField">
+          <span>描述统计缺失值</span>
           <select id="missingMode">
-            <option value="ignore" selected>忽略缺失值</option>
-            <option value="zero">按 0 处理</option>
+            <option value="ignore">忽略缺失</option>
+            <option value="zero">仅将真正空白按 0</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>小数格式</span>
+          <select id="decimalSeparator">
+            <option value="auto">自动识别</option>
+            <option value="dot">小数点（1.5）</option>
+            <option value="comma">小数逗号（1,5）</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>百分号解析</span>
+          <select id="percentMode">
+            <option value="number">12.5% → 12.5</option>
+            <option value="fraction">12.5% → 0.125</option>
           </select>
         </label>
       </div>
-
-      <div id="formulaNote" class="formula-note"></div>
+      <div id="modeNote" class="note"></div>
     </section>
 
-    <section class="card samples-card" aria-labelledby="data-title">
-      <div class="section-heading">
-        <div>
-          <h2 id="data-title">第 2 步 · 录入数据</h2>
-          <p class="heading-note">可上传文件，也可直接从 Excel、WPS 或聊天窗口复制粘贴。</p>
-        </div>
-        <div class="button-row example-picker">
-          <label class="button button-ghost file-button" for="fileInput">选择 CSV</label>
-          <input id="fileInput" class="hidden" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" />
-          <select id="exampleSelect" aria-label="选择示例数据">
-            <option value="general">通用统计演示</option>
-            <option value="qpcr_two">qPCR：两组相对表达</option>
-            <option value="qpcr_multi">qPCR：多处理组表达</option>
-            <option value="western">Western blot：蛋白灰度</option>
-            <option value="elisa">ELISA：细胞因子浓度</option>
-            <option value="viability">细胞活力：剂量处理</option>
-            <option value="apoptosis">流式凋亡：分类结局</option>
-            <option value="crispr">CRISPR：编辑效率与阳性率</option>
-            <option value="correlation">mRNA–蛋白表达相关</option>
-          </select>
-          <button id="loadExampleBtn" class="button button-primary" type="button">载入示例</button>
-        </div>
+    <section class="card step-card" aria-labelledby="step2Title">
+      <div class="step-heading">
+        <span class="step-number">2</span>
+        <div><h2 id="step2Title">录入数据</h2><p>支持 CSV、TSV、分号文件、引号字段和 GB18030 / Big5 编码。</p></div>
       </div>
 
-      <div class="quick-input-card">
-        <div class="quick-input-heading">
-          <div>
-            <strong>快速粘贴输入</strong>
-            <span>粘贴后选择对应解析方式，不会边输入边覆盖数据。</span>
+      <div class="import-grid">
+        <div class="import-panel">
+          <label class="field"><span>文件编码</span>
+            <select id="fileEncoding">
+              <option value="auto">自动（UTF-8 → GB18030）</option>
+              <option value="utf-8">UTF-8</option>
+              <option value="gb18030">GB18030 / GBK</option>
+              <option value="big5">Big5</option>
+            </select>
+          </label>
+          <label id="dropZone" class="drop-zone">
+            <input id="fileInput" type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain">
+            <strong>选择或拖入 CSV / TSV</strong>
+            <span>单文件最大 10 MiB，最多 100,000 行</span>
+          </label>
+          <div class="inline-actions">
+            <label class="field compact"><span>示例数据</span><select id="exampleSelect">
+              <option value="two">两组实验数据</option>
+              <option value="multi">多组实验数据</option>
+              <option value="correlation">相关数据（含缺失）</option>
+              <option value="categorical">分类变量数据</option>
+              <option value="quality">数据质量示例</option>
+            </select></label>
+            <button id="loadExampleBtn" class="button secondary" type="button">载入示例</button>
           </div>
-          <button id="readClipboardBtn" class="button button-ghost button-small" type="button">读取剪贴板</button>
         </div>
-        <textarea id="pasteArea" class="paste-area" placeholder="表格示例：首行为字段名，可直接粘贴 Excel 区域。&#10;&#10;分组示例：&#10;对照组: 68, 71, 75, 77&#10;处理组: 81, 85, 89, 92" rows="7"></textarea>
-        <div class="input-actions">
-          <button id="parseTableBtn" class="button button-primary" type="button">按表格解析</button>
-          <button id="parseGroupsBtn" class="button button-ghost" type="button">按分组数值解析</button>
-          <button id="clearInputBtn" class="button button-ghost" type="button">清空输入框</button>
+        <div class="import-panel">
+          <label class="field"><span>快速粘贴</span><textarea id="pasteArea" rows="8" placeholder="可粘贴完整表格，或：&#10;对照组: 1.2, 1.4, 1.5&#10;处理组: 2.1, 2.4, 2.2"></textarea></label>
+          <div class="button-row">
+            <button id="parseTableBtn" class="button secondary" type="button">按表格解析</button>
+            <button id="parseGroupsBtn" class="button secondary" type="button">按分组数值解析</button>
+            <button id="clearInputBtn" class="button ghost" type="button">清空输入</button>
+          </div>
         </div>
-        <p class="help-text">“按分组数值解析”支持 <code>组名: 1, 2, 3</code>，也支持从 Excel 粘贴“每列一组”的宽表。</p>
       </div>
 
-      <div id="dropZone" class="drop-zone" tabindex="0">
-        <strong>也可以把 CSV / TSV 文件拖到这里</strong>
-        <span>所有计算均在当前浏览器本地完成，数据不会上传。</span>
-      </div>
-
-      <div class="editor-toolbar" aria-label="表格编辑工具">
+      <div class="editor-toolbar">
         <div class="button-row">
-          <button id="createTableBtn" class="button button-primary button-small" type="button">新建空白表格</button>
-          <button id="clearDataBtn" class="button button-ghost button-small button-danger-ghost" type="button">清空表格</button>
-          <button id="addRowBtn" class="button button-ghost button-small" type="button">新增行</button>
-          <button id="addColumnBtn" class="button button-ghost button-small" type="button">新增列</button>
-          <button id="deleteRowBtn" class="button button-ghost button-small" type="button">删除所选行</button>
-          <button id="deleteColumnBtn" class="button button-ghost button-small" type="button">删除所选列</button>
+          <button id="newTableBtn" class="button secondary" type="button">新建空表</button>
+          <button id="clearTableBtn" class="button ghost" type="button">清空表格</button>
+          <button id="addRowBtn" class="button ghost" type="button">新增行</button>
+          <button id="addColumnBtn" class="button ghost" type="button">新增列</button>
+          <button id="deleteRowBtn" class="button danger" type="button">删除所选行</button>
+          <button id="deleteColumnBtn" class="button danger" type="button">删除所选列</button>
         </div>
-        <span id="editorStatus" class="editor-status">点击单元格即可直接编辑，也可把 Excel 区域粘贴到任意单元格。</span>
+        <div class="pager">
+          <button id="prevPageBtn" class="icon-button" type="button" aria-label="上一页">‹</button>
+          <span id="pageStatus"></span>
+          <button id="nextPageBtn" class="icon-button" type="button" aria-label="下一页">›</button>
+        </div>
       </div>
-
-      <div class="table-wrap preview-wrap spreadsheet-wrap">
-        <table id="dataTable" class="spreadsheet-table">
-          <thead><tr id="dataHead"></tr></thead>
+      <div id="editorStatus" class="status-line" role="status"></div>
+      <div class="table-wrap editor-wrap">
+        <table id="dataTable" class="data-table editor-table">
+          <thead id="dataHead"></thead>
           <tbody id="dataBody"></tbody>
         </table>
       </div>
-
-      <p id="dataHelp" class="help-text">字段名和单元格均可直接编辑；在单元格中粘贴多行多列内容会自动扩展表格。</p>
     </section>
 
-    <section class="card results-card" aria-labelledby="results-title">
-      <div class="section-heading">
-        <div>
-          <h2 id="results-title">第 3 步 · 分析结果</h2>
-          <p class="heading-note">绿色“推荐”仅是自动建议；研究设计和专业判断优先。</p>
-        </div>
-        <div class="button-row">
-          <button id="copyBtn" class="button button-ghost" type="button">复制结果</button>
-          <button id="exportBtn" class="button button-ghost" type="button">导出 CSV</button>
+    <section class="card step-card" aria-labelledby="step3Title">
+      <div class="step-heading result-heading">
+        <span class="step-number">3</span>
+        <div><h2 id="step3Title">分析结果</h2><p>每次编辑后自动重新计算；精确枚举在 Web Worker 中运行。</p></div>
+        <div class="button-row result-actions">
+          <button id="copyBtn" class="button ghost" type="button">复制结果</button>
+          <button id="exportBtn" class="button secondary" type="button">导出 CSV</button>
         </div>
       </div>
-
-      <div id="recommendation" class="recommendation hidden" aria-live="polite"></div>
-      <div id="summary" class="summary-grid" aria-live="polite"></div>
       <div id="alerts" class="alerts" aria-live="polite"></div>
-
-      <div id="diagnosticsCard" class="diagnostics-card hidden">
-        <div class="chart-heading">
-          <strong>自动诊断</strong>
-          <span>自动选择推荐检验，但可手动切换；小样本时避免过度解读</span>
-        </div>
-        <div class="table-wrap">
-          <table id="diagnosticsTable">
-            <thead><tr id="diagnosticsHead"></tr></thead>
-            <tbody id="diagnosticsBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div id="chartCard" class="chart-card hidden">
-        <div class="chart-heading">
-          <strong id="chartTitle">数值分布</strong>
-          <span id="chartMeta"></span>
-        </div>
-        <div id="chartBars" class="chart-bars" aria-label="直方图"></div>
-      </div>
-
-      <div class="table-wrap">
-        <table id="resultsTable">
-          <thead><tr id="resultsHead"></tr></thead>
-          <tbody id="resultsBody"></tbody>
-        </table>
-      </div>
-
-      <div id="postHocCard" class="posthoc-card hidden">
-        <div class="chart-heading">
-          <strong id="postHocTitle">事后两两比较</strong>
-          <span id="postHocMeta">P 值使用 Holm 逐步校正</span>
-        </div>
-        <div class="table-wrap">
-          <table id="postHocTable">
-            <thead><tr id="postHocHead"></tr></thead>
-            <tbody id="postHocBody"></tbody>
-          </table>
-        </div>
-      </div>
+      <div id="recommendation" class="recommendation"></div>
+      <div id="summaryCards" class="summary-grid"></div>
+      <section id="qualitySection" class="result-block">
+        <h3>数据质量</h3>
+        <div class="table-wrap"><table class="data-table"><thead id="qualityHead"></thead><tbody id="qualityBody"></tbody></table></div>
+      </section>
+      <section id="mainResultSection" class="result-block">
+        <h3 id="mainResultTitle">结果</h3>
+        <p id="mainResultMeta" class="muted"></p>
+        <div class="table-wrap"><table class="data-table"><thead id="resultHead"></thead><tbody id="resultBody"></tbody></table></div>
+      </section>
+      <section id="secondarySection" class="result-block hidden">
+        <h3 id="secondaryTitle">补充结果</h3>
+        <p id="secondaryMeta" class="muted"></p>
+        <div class="table-wrap"><table class="data-table"><thead id="secondaryHead"></thead><tbody id="secondaryBody"></tbody></table></div>
+      </section>
     </section>
 
-    <section class="card notes-card" aria-labelledby="notes-title">
-      <h2 id="notes-title">方法说明</h2>
-      <ul>
-        <li><strong>两独立样本：</strong>同时计算等方差 t、Welch t、Mann–Whitney U 和可行时的精确置换 P。系统会结合所选正态性检验与方差齐性检验给出推荐，但不会隐藏其他结果。</li>
-        <li><strong>多独立组：</strong>同时计算经典单因素 ANOVA、Welch ANOVA 和 Kruskal–Wallis。事后方法可选 Tukey–Kramer、Games–Howell、Fisher LSD、两两 t、Dunn 和两两 Mann–Whitney，并可选 Holm、Bonferroni、Šidák 或 BH-FDR 校正。</li>
-        <li><strong>相关性：</strong>Pearson 是参数化线性相关；Spearman 是基于秩的非参数相关。自动模式会根据当前选择的正态性诊断推荐矩阵，但两种结果均可切换查看。</li>
-        <li><strong>分类变量：</strong>同时提供 Pearson χ² 渐近 P 与固定边际精确置换 P。期望频数较小时优先参考精确结果。</li>
-        <li><strong>自动筛查：</strong>正态性自动模式会按样本量、重复值比例等选择 Shapiro 系列、Anderson–Darling、D’Agostino–Pearson 或 Jarque–Bera；方差齐性自动模式在分布较合理时可选 Bartlett，否则优先 Brown–Forsythe。用户可手动改用其他方法。</li>
-        <li><strong>表格编辑：</strong>可直接修改字段名与单元格，支持在任意单元格粘贴 Excel/WPS 的多行多列区域；分析会在编辑后自动刷新。</li>
-        <li>自动推荐不会替代研究设计判断。重复测量、配对数据、聚类样本、协变量调整和多重比较需要使用相应的专门模型。</li>
-      </ul>
+    <section class="card method-card">
+      <h2>修复与方法说明</h2>
+      <div class="method-grid">
+        <p><strong>数值解析：</strong>非法文本与真正缺失分离；小数逗号不再被删除；百分号语义可配置。</p>
+        <p><strong>CSV：</strong>分隔符探测忽略引号内部字符，未闭合引号会阻止导入，导出防公式注入。</p>
+        <p><strong>统计：</strong>Mann–Whitney 在 U 等于均值时不做连续性校正；学生化极差有限自由度计算延续到 df=100,000；保留自动/手动正态性与方差诊断。</p>
+        <p><strong>样本量：</strong>相关矩阵逐对显示实际 N；字段概览分别显示有效数值、无效格式与缺失。</p>
+      </div>
     </section>
   </main>
 
-  <footer class="site-footer"><div class="container">基础统计分析工具 · 浏览器本地计算</div></footer>
-  <script src="./app.js" defer></script>
+  <footer class="site-footer"><div class="shell">仅用于探索和快速核对；复杂研究设计请使用专业统计模型并复核结果。</div></footer>
+  <script type="module" src="./src/app.mjs"></script>
 </body>
 </html>

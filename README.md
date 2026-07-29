@@ -1,64 +1,69 @@
-# 基础统计分析工具 v6
+# 基础统计分析工具 v7（修复版）
 
-纯前端、本地计算的网页版统计分析 Demo。页面视觉延续 YDchenTools / WB-balancer 的米白背景、青绿色主色、白色圆角卡片和三步式流程。
+一个无需后端、无需构建步骤的纯静态统计分析工具。数据在浏览器本地处理。
 
-## 本版新增
+## 直接部署
 
-- 可编辑表格上方增加“清空表格”：清空全部单元格，但保留字段名、列结构与至少 10 行空白输入区。
-- 正态性检验支持自动推荐与手动切换：
-  - Shapiro 系列：n=3 使用 Shapiro–Wilk 精确形式，n≥4 使用 Shapiro–Francia W′；
-  - Anderson–Darling；
-  - D’Agostino–Pearson K²；
-  - Jarque–Bera。
-- 自动正态性规则会参考样本量和重复值比例；手动选择的方法仍会保留，即使当前样本量不足，也会明确显示“不适用”。
-- 方差齐性检验支持自动推荐与手动切换：Brown–Forsythe、Levene、Bartlett。
-- 多独立组事后检验扩展为：
-  - Tukey–Kramer HSD；
-  - Games–Howell；
-  - Fisher LSD；
-  - 两两 pooled t；
-  - 两两 Welch t；
-  - Dunn 秩检验；
-  - 两两 Mann–Whitney U。
-- 多重比较校正可选：不校正、Holm、Bonferroni、Šidák、Benjamini–Hochberg FDR。Tukey–Kramer 和 Games–Howell 使用学生化极差分布自带家族错误控制；Fisher LSD 按定义不校正。
-- 示例数据改为下拉列表，增加分子生物学实验模拟数据：qPCR 两组/多组、Western blot、ELISA、细胞活力、流式凋亡、CRISPR 和 mRNA–蛋白相关。
-
-## 已有功能
-
-- 类电子表格直接编辑、增删行列、Excel/WPS 多区域粘贴；
-- 数据概览、分组汇总、描述统计；
-- Pearson 与 Spearman 相关；
-- Pearson 卡方与固定边际精确 P；
-- 两独立样本等方差 t、Welch t、Mann–Whitney U、精确置换 P；
-- 经典单因素 ANOVA、Welch ANOVA、Kruskal–Wallis；
-- 自动建议参数/非参数方法，但保留所有可计算结果；
-- CSV/TSV 上传、整表粘贴、每组一行快捷输入；
-- 复制和导出结果；
-- localStorage 本地保存。
-
-## 使用
-
-直接打开 `index.html`，或在当前目录启动本地静态服务器：
-
-```bash
-python -m http.server 8000
-```
-
-然后访问 `http://localhost:8000`。
-
-## Cloudflare 部署
-
-将 ZIP 直接上传到 Cloudflare Workers Static Assets / Pages。ZIP 根目录应直接包含：
+部署根目录必须包含：
 
 ```text
 index.html
 styles.css
-app.js
-README.md
+src/
+_headers        # Cloudflare Pages 可选但推荐
 ```
 
-不需要 Bindings、数据库或后端运行环境。
+### Cloudflare Pages
 
-## 方法提示
+1. 解压部署包。
+2. 将解压后的目录内容上传，或把该目录提交到 Git 仓库。
+3. Framework preset 选择 `None`。
+4. Build command 留空。
+5. Build output directory 使用 `/`（仓库根目录）。
 
-本工具用于基础探索和快速核对。自动推荐不能替代研究设计判断。分子生物学技术重复不等于独立生物学重复；qPCR 通常优先在 ΔCt 或模型尺度上推断，而不是直接对折叠变化做常规 t 检验。重复测量、配对数据、批次效应、多因素设计、协变量调整和复杂缺失机制需要专门模型。
+### GitHub Pages / 任意静态服务器
+
+直接发布目录根部即可。所有资源都使用相对路径，支持子路径部署。
+
+本地预览：
+
+```bash
+python3 -m http.server 8080
+```
+
+然后访问 `http://localhost:8080/`。
+
+> 不建议直接双击 `index.html` 通过 `file://` 打开；浏览器可能限制 ES Modules 和 Web Worker。请使用静态服务器。
+
+## 开发与回归测试
+
+只要求 Node.js 20+，没有第三方运行时依赖：
+
+```bash
+npm run check
+npm test
+```
+
+## 已修复的关键问题
+
+- Mann–Whitney U 在 `U == E(U)` 时不再错误施加连续性校正。
+- 保留并可切换 Shapiro 系列、Anderson–Darling、D’Agostino–Pearson、Jarque–Bera，以及 Bartlett、Levene、Brown–Forsythe。
+- 保留 Tukey–Kramer、Games–Howell、Fisher LSD、两两 t、Dunn 与 Mann–Whitney 事后比较。
+- 小数逗号、严格千分位与百分号解析分离，避免静默改写数值。
+- 真正缺失值和非法文本分离；“缺失按 0”不会把录入错误改成 0。
+- CSV/TSV 分隔符检测理解引号；未闭合引号会阻止导入。
+- 学生化极差有限自由度计算不再在 `df=201` 突然切换到无穷自由度。
+- 字段概览分别报告非空值、有效数值、非法格式和缺失值。
+- 相关分析逐对报告实际使用的样本量 N。
+- CSV 导出防止电子表格公式注入。
+- 精确枚举区分“组合数过大”“超时”和数值失败。
+- 大计算移入 Web Worker；编辑表格使用分页并限制文件大小/行数。
+- localStorage 超限或失败时在界面明确提示。
+- 支持 UTF-8、GB18030/GBK 与 Big5 文件读取。
+- 自动迁移旧版 `basic-stat-demo-v6` 本地状态中的模式名、事后方法和校正设置。
+
+完整说明见 [`FIXES.md`](./FIXES.md)。
+
+## 范围与注意事项
+
+本工具用于探索、教学和快速核对，不替代针对复杂研究设计的专业统计建模。对于临床、监管、科研发表或高风险决策，必须使用成熟统计软件独立复核。
