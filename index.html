@@ -155,10 +155,15 @@
             <option value="big5">编码：Big5</option>
           </select>
           <select id="exampleSelect" aria-label="选择示例数据">
-            <option value="two">两组实验数据</option>
-            <option value="multi">多组实验数据</option>
-            <option value="correlation">相关数据（含缺失）</option>
-            <option value="categorical">分类变量数据</option>
+            <option value="general">通用统计演示</option>
+            <option value="qpcr_two">qPCR：两组相对表达</option>
+            <option value="qpcr_multi">qPCR：多处理组表达</option>
+            <option value="western">Western blot：蛋白灰度</option>
+            <option value="elisa">ELISA：细胞因子浓度</option>
+            <option value="viability">细胞活力：剂量处理</option>
+            <option value="apoptosis">流式凋亡：分类结局</option>
+            <option value="crispr">CRISPR：编辑效率与阳性率</option>
+            <option value="correlation">mRNA–蛋白表达相关</option>
             <option value="quality">数据质量示例</option>
           </select>
           <button id="loadExampleBtn" class="button button-primary" type="button">载入示例</button>

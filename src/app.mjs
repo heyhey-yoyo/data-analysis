@@ -732,13 +732,14 @@ async function analyzeCategorical(currentProfiles, version) {
   setSecondary('列联表', `排除任一字段空白的记录 ${built.excluded} 行。`, [state.categoryColumnA, ...built.columnLabels, '合计'], contingencyRows);
   const exact = await runHeavyTask('fixed-margin-exact', { counts: built.counts, options: { maximumTables: 100000, timeLimitMilliseconds: 1800 } });
   if (version !== analysisVersion) return;
-  const statusText = {
-    exact: `枚举 ${exact.tableCount.toLocaleString()} 个表`,
-    'too-many-tables': `组合超过 100,000（已枚举 ${exact.tableCount.toLocaleString()}）`,
-    timeout: `超过 1.8 秒（已枚举 ${exact.tableCount.toLocaleString()}）`,
-    'enumeration-failed': '枚举失败',
-    invalid: '不适用',
-  }[exact.status] || exact.status;
+  const statusText = (() => {
+    if (exact.status === 'exact') return `枚举 ${exact.tableCount.toLocaleString()} 个表`;
+    if (exact.status === 'too-many-tables') return `组合超过 100,000（已枚举 ${exact.tableCount.toLocaleString()}）`;
+    if (exact.status === 'timeout') return `超过 1.8 秒（已枚举 ${exact.tableCount.toLocaleString()}）`;
+    if (exact.status === 'enumeration-failed') return '枚举失败';
+    if (exact.status === 'invalid') return '不适用';
+    return exact.status;
+  })();
   setMainResult('分类变量关联检验', 'Pearson χ² 为渐近检验；期望频数较小时优先参考成功完成的固定边际精确结果。', ['方法', '统计量', 'df', 'P', '效应 / 状态'], [
     ['Pearson χ²', formatNumber(summary.statistic), summary.df, pCell(summary.pValue), `Cramér V = ${formatNumber(summary.cramerV)}`],
     ['固定边际精确 P', formatNumber(summary.statistic), '固定边际', exact.status === 'exact' ? pCell(exact.pValue) : '—', statusText],
@@ -790,13 +791,14 @@ async function analyzeTwoGroup(currentProfiles, version) {
 
   const exact = await runHeavyTask('two-sample-permutation', { valuesA: built.groups[0], valuesB: built.groups[1], options: { maximumPermutations: 100000, timeLimitMilliseconds: 1800 } });
   if (version !== analysisVersion) return;
-  const statusText = {
-    exact: `${exact.extremeCount}/${exact.totalCount} 个排列同样或更极端`,
-    'too-many-combinations': `组合数超过 100,000（估计 ${Math.round(exact.estimatedCount).toLocaleString()}）`,
-    timeout: `超过 1.8 秒（完成 ${exact.totalCount.toLocaleString()} / ${exact.estimatedCount.toLocaleString()}）`,
-    'enumeration-failed': '枚举数量校验失败',
-    invalid: '不适用',
-  }[exact.status] || exact.status;
+  const statusText = (() => {
+    if (exact.status === 'exact') return `${exact.extremeCount}/${exact.totalCount} 个排列同样或更极端`;
+    if (exact.status === 'too-many-combinations') return `组合数超过 100,000（估计 ${Math.round(exact.estimatedCount).toLocaleString()}）`;
+    if (exact.status === 'timeout') return `超过 1.8 秒（完成 ${exact.totalCount.toLocaleString()} / ${exact.estimatedCount.toLocaleString()}）`;
+    if (exact.status === 'enumeration-failed') return '枚举数量校验失败';
+    if (exact.status === 'invalid') return '不适用';
+    return exact.status;
+  })();
   rows[3] = ['精确均值置换', formatNumber(exact.observedDifference), '固定组大小', exact.status === 'exact' ? pCell(exact.pValue) : '—', '均值差', statusText];
   setMainResult('两独立样本检验', '多种结果并列展示；方法选择应结合分布、方差、测量尺度和研究设计。', ['方法', '统计量', 'df', 'P', '效应量', '说明'], rows);
 
@@ -943,48 +945,109 @@ function parseGroupedText(text) {
 
 function loadExample(key) {
   const examples = {
-    two: {
-      headers: ['组别', '数值'],
-      rows: [
-        ['对照', '9.8'], ['对照', '10.4'], ['对照', '9.9'], ['对照', '10.2'], ['对照', '10.0'], ['对照', '10.3'],
-        ['处理', '11.5'], ['处理', '12.0'], ['处理', '11.8'], ['处理', '12.3'], ['处理', '11.7'], ['处理', '12.1'],
-      ],
-      mode: 'two-group', value: '数值', group: '组别',
+    general: {
+      name: '通用统计演示', mode: 'overview', value: '评分', group: '三组', a: '两组', b: '是否改善',
+      text: [
+        '样本	两组	三组	是否改善	年龄	收缩压	评分',
+        'S01	对照组	低剂量	否	24	112	68', 'S02	对照组	低剂量	否	27	118	71', 'S03	对照组	低剂量	是	31	121	75',
+        'S04	对照组	低剂量	否	35	124	77', 'S05	对照组	低剂量	是	40	126	79', 'S06	对照组	低剂量	否	38	120	74',
+        'S07	处理组	中剂量	是	25	128	81', 'S08	处理组	中剂量	是	29	132	85', 'S09	处理组	中剂量	是	33	136	89',
+        'S10	处理组	中剂量	否	38	141	92', 'S11	处理组	中剂量	是	42	145	95', 'S12	处理组	中剂量	是	36	139	90',
+        'S13	处理组	高剂量	是	26	134	88', 'S14	处理组	高剂量	是	30	138	91', 'S15	处理组	高剂量	是	34	142	94',
+        'S16	处理组	高剂量	是	39	148	98', 'S17	处理组	高剂量	否	43	151	101', 'S18	处理组	高剂量	是	41	149	99',
+      ].join('\n'),
     },
-    multi: {
-      headers: ['组别', '表达量'],
-      rows: [
-        ['对照', '1.02'], ['对照', '0.96'], ['对照', '1.08'], ['对照', '1.01'], ['对照', '0.99'],
-        ['低剂量', '1.18'], ['低剂量', '1.25'], ['低剂量', '1.21'], ['低剂量', '1.16'], ['低剂量', '1.23'],
-        ['高剂量', '1.53'], ['高剂量', '1.62'], ['高剂量', '1.58'], ['高剂量', '1.47'], ['高剂量', '1.66'],
-      ],
-      mode: 'multi-group', value: '表达量', group: '组别',
+    qpcr_two: {
+      name: 'qPCR：两组相对表达', mode: 'two-group', value: 'DeltaCt', group: 'Group',
+      text: [
+        'Sample	Group	Target_Ct	Reference_Ct	DeltaCt	RelativeExpression',
+        'C01	Control	27.8	20.1	7.7	1.00', 'C02	Control	28.2	20.3	7.9	0.87', 'C03	Control	27.5	19.9	7.6	1.07', 'C04	Control	28.0	20.2	7.8	0.93',
+        'C05	Control	27.9	20.0	7.9	0.87', 'C06	Control	27.6	20.1	7.5	1.15', 'C07	Control	28.1	20.4	7.7	1.00', 'C08	Control	27.7	20.0	7.7	1.00',
+        'T01	Treatment	25.9	20.0	5.9	3.48', 'T02	Treatment	26.3	20.2	6.1	3.03', 'T03	Treatment	25.7	19.9	5.8	3.73', 'T04	Treatment	26.1	20.1	6.0	3.25',
+        'T05	Treatment	26.4	20.3	6.1	3.03', 'T06	Treatment	25.8	20.0	5.8	3.73', 'T07	Treatment	26.0	20.1	5.9	3.48', 'T08	Treatment	26.2	20.2	6.0	3.25',
+      ].join('\n'),
+    },
+    qpcr_multi: {
+      name: 'qPCR：多处理组表达', mode: 'multi-group', value: 'DeltaCt', group: 'Treatment',
+      text: [
+        'Sample	Treatment	DeltaCt	RelativeExpression',
+        'C01	Control	8.2	1.00', 'C02	Control	8.0	1.15', 'C03	Control	8.3	0.93', 'C04	Control	8.1	1.07', 'C05	Control	8.4	0.87', 'C06	Control	7.9	1.23',
+        'S01	siRNA	6.8	2.64', 'S02	siRNA	6.6	3.03', 'S03	siRNA	6.9	2.46', 'S04	siRNA	6.7	2.83', 'S05	siRNA	6.5	3.25', 'S06	siRNA	6.8	2.64',
+        'D01	Drug	7.4	1.74', 'D02	Drug	7.2	2.00', 'D03	Drug	7.5	1.62', 'D04	Drug	7.3	1.87', 'D05	Drug	7.1	2.14', 'D06	Drug	7.4	1.74',
+        'X01	Combo	5.9	4.93', 'X02	Combo	6.1	4.29', 'X03	Combo	5.8	5.28', 'X04	Combo	6.0	4.59', 'X05	Combo	5.7	5.66', 'X06	Combo	6.2	4.00',
+      ].join('\n'),
+    },
+    western: {
+      name: 'Western blot：蛋白灰度', mode: 'multi-group', value: 'NormalizedProtein', group: 'Group',
+      text: [
+        'Sample	Group	TargetBand	LoadingControl	NormalizedProtein',
+        'C01	Control	8120	7900	1.028', 'C02	Control	7750	7680	1.009', 'C03	Control	8310	8050	1.032', 'C04	Control	7580	7700	0.984', 'C05	Control	8040	8010	1.004', 'C06	Control	7920	7990	0.991',
+        'S01	Stimulated	12100	8050	1.503', 'S02	Stimulated	11840	7900	1.499', 'S03	Stimulated	12620	8200	1.539', 'S04	Stimulated	11450	7800	1.468', 'S05	Stimulated	12300	8100	1.519', 'S06	Stimulated	11920	7950	1.499',
+        'I01	Stim+Inhibitor	9160	8000	1.145', 'I02	Stim+Inhibitor	8890	7850	1.132', 'I03	Stim+Inhibitor	9470	8120	1.166', 'I04	Stim+Inhibitor	8720	7780	1.121', 'I05	Stim+Inhibitor	9280	8060	1.151', 'I06	Stim+Inhibitor	9010	7920	1.138',
+      ].join('\n'),
+    },
+    elisa: {
+      name: 'ELISA：细胞因子浓度', mode: 'multi-group', value: 'IL6_pg_mL', group: 'Condition',
+      text: [
+        'Sample	Condition	IL6_pg_mL',
+        'C01	Control	18.2', 'C02	Control	21.4', 'C03	Control	17.6', 'C04	Control	24.1', 'C05	Control	19.8', 'C06	Control	22.0', 'C07	Control	20.7', 'C08	Control	18.9',
+        'L01	LPS	146.2', 'L02	LPS	178.4', 'L03	LPS	132.7', 'L04	LPS	205.1', 'L05	LPS	159.6', 'L06	LPS	188.8', 'L07	LPS	151.3', 'L08	LPS	221.5',
+        'D01	LPS+Drug	74.5', 'D02	LPS+Drug	82.1', 'D03	LPS+Drug	68.9', 'D04	LPS+Drug	96.4', 'D05	LPS+Drug	79.8', 'D06	LPS+Drug	88.2', 'D07	LPS+Drug	71.6', 'D08	LPS+Drug	91.0',
+      ].join('\n'),
+    },
+    viability: {
+      name: '细胞活力：剂量处理', mode: 'multi-group', value: 'Viability_pct', group: 'DoseGroup',
+      text: [
+        'Sample	DoseGroup	Dose_uM	Viability_pct',
+        'D0_1	0 uM	0	100.8', 'D0_2	0 uM	0	98.9', 'D0_3	0 uM	0	101.5', 'D0_4	0 uM	0	99.7', 'D0_5	0 uM	0	102.1', 'D0_6	0 uM	0	97.8',
+        'D01_1	0.1 uM	0.1	94.2', 'D01_2	0.1 uM	0.1	96.1', 'D01_3	0.1 uM	0.1	92.8', 'D01_4	0.1 uM	0.1	95.4', 'D01_5	0.1 uM	0.1	93.7', 'D01_6	0.1 uM	0.1	97.0',
+        'D1_1	1 uM	1	76.4', 'D1_2	1 uM	1	72.8', 'D1_3	1 uM	1	79.1', 'D1_4	1 uM	1	74.5', 'D1_5	1 uM	1	77.2', 'D1_6	1 uM	1	73.6',
+        'D10_1	10 uM	10	41.5', 'D10_2	10 uM	10	38.7', 'D10_3	10 uM	10	44.2', 'D10_4	10 uM	10	36.9', 'D10_5	10 uM	10	42.8', 'D10_6	10 uM	10	39.6',
+      ].join('\n'),
+    },
+    apoptosis: {
+      name: '流式凋亡：分类结局', mode: 'categorical', a: 'Treatment', b: 'Apoptosis',
+      text: [
+        'CellEvent	Treatment	Apoptosis	AnnexinV_pct',
+        'C01	Control	Negative	5.2', 'C02	Control	Negative	6.1', 'C03	Control	Negative	4.8', 'C04	Control	Negative	5.7', 'C05	Control	Negative	6.4', 'C06	Control	Negative	5.5', 'C07	Control	Positive	8.1', 'C08	Control	Negative	6.0',
+        'T01	Drug	Positive	32.4', 'T02	Drug	Positive	28.7', 'T03	Drug	Positive	35.1', 'T04	Drug	Positive	31.6', 'T05	Drug	Positive	29.9', 'T06	Drug	Positive	37.2', 'T07	Drug	Negative	24.6', 'T08	Drug	Positive	33.0',
+        'R01	Drug+Rescue	Negative	14.2', 'R02	Drug+Rescue	Positive	18.6', 'R03	Drug+Rescue	Negative	12.8', 'R04	Drug+Rescue	Negative	15.4', 'R05	Drug+Rescue	Positive	19.1', 'R06	Drug+Rescue	Negative	13.7', 'R07	Drug+Rescue	Negative	16.0', 'R08	Drug+Rescue	Positive	17.8',
+      ].join('\n'),
+    },
+    crispr: {
+      name: 'CRISPR：编辑效率与阳性率', mode: 'categorical', value: 'Indel_pct', group: 'sgRNA', a: 'sgRNA', b: 'Edited',
+      text: [
+        'Sample	sgRNA	Edited	Indel_pct',
+        'NT01	NonTargeting	No	1.2', 'NT02	NonTargeting	No	0.8', 'NT03	NonTargeting	No	1.5', 'NT04	NonTargeting	No	0.6', 'NT05	NonTargeting	No	1.1', 'NT06	NonTargeting	No	0.9', 'NT07	NonTargeting	Yes	2.4', 'NT08	NonTargeting	No	1.0',
+        'G1_01	sgRNA-1	Yes	48.2', 'G1_02	sgRNA-1	Yes	52.6', 'G1_03	sgRNA-1	Yes	45.9', 'G1_04	sgRNA-1	Yes	55.1', 'G1_05	sgRNA-1	Yes	50.4', 'G1_06	sgRNA-1	Yes	47.8', 'G1_07	sgRNA-1	No	18.5', 'G1_08	sgRNA-1	Yes	53.0',
+        'G2_01	sgRNA-2	Yes	31.4', 'G2_02	sgRNA-2	No	12.6', 'G2_03	sgRNA-2	Yes	28.9', 'G2_04	sgRNA-2	Yes	35.7', 'G2_05	sgRNA-2	No	14.2', 'G2_06	sgRNA-2	Yes	33.1', 'G2_07	sgRNA-2	Yes	29.8', 'G2_08	sgRNA-2	No	11.9',
+      ].join('\n'),
     },
     correlation: {
-      headers: ['mRNA', '蛋白', '活性'],
-      rows: [
-        ['1.1', '0.9', '12'], ['1.4', '1.2', '15'], ['1.8', '1.5', '18'], ['2.1', '', '21'],
-        ['2.4', '2.0', '24'], ['2.7', '2.2', ''], ['3.0', '2.7', '29'], ['3.4', '3.0', '31'],
-      ],
-      mode: 'correlation',
-    },
-    categorical: {
-      headers: ['治疗', '结局'],
-      rows: [
-        ...Array.from({ length: 14 }, () => ['A', '改善']), ...Array.from({ length: 6 }, () => ['A', '未改善']),
-        ...Array.from({ length: 7 }, () => ['B', '改善']), ...Array.from({ length: 13 }, () => ['B', '未改善']),
-      ],
-      mode: 'categorical', a: '治疗', b: '结局',
+      name: 'mRNA–蛋白表达相关', mode: 'correlation',
+      text: [
+        'Sample	mRNA_FoldChange	Protein_FoldChange	PhenotypeScore',
+        'S01	0.62	0.71	18', 'S02	0.78	0.81	22', 'S03	0.91	0.88	25', 'S04	1.05	1.12	31', 'S05	1.18	1.21	34', 'S06	1.32	1.28	38',
+        'S07	1.46	1.51	43', 'S08	1.61	1.58	47', 'S09	1.74	1.69	51', 'S10	1.92	1.87	56', 'S11	2.08	2.02	60', 'S12	2.23	2.18	64',
+        'S13	2.41	2.36	68', 'S14	2.58	2.49	71', 'S15	2.76	2.69	75', 'S16	2.94	2.87	79', 'S17	3.11	3.02	82', 'S18	3.28	3.19	85',
+      ].join('\n'),
     },
     quality: {
+      name: '数据质量示例',
       headers: ['Value', 'Group', 'Percent'],
       rows: [['1,5', 'A', '12.5%'], ['2,5', 'A', '8%'], ['bad', 'B', ''], ['', 'B', '=1+1']],
       mode: 'overview',
     },
   };
-  const example = examples[key] || examples.two;
-  state.headers = example.headers.slice();
-  state.rows = example.rows.map((row) => row.slice());
+  const example = examples[key] || examples.general;
+  if (example.text) {
+    const parsed = parseDelimited(example.text);
+    state.headers = parsed.headers;
+    state.rows = parsed.rows;
+  } else {
+    state.headers = example.headers.slice();
+    state.rows = example.rows.map((row) => row.slice());
+  }
   state.analysisMode = example.mode;
   state.valueColumn = example.value || state.headers.find((header) => header !== example.group) || state.headers[0];
   state.groupColumn = example.group || state.headers[0];
