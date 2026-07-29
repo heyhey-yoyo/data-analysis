@@ -931,6 +931,8 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
   const rows = [];
   const appliedCorrection = method === 'fisher-lsd' ? 'none' : correction;
   const omnibus = oneWayAnova(groups);
+  // protected Fisher LSD：总体 ANOVA 未显著时不执行两两比较
+  if (method === 'fisher-lsd' && !(omnibus && Number.isFinite(omnibus.pValue) && omnibus.pValue < ALPHA)) return rows;
   const mse = omnibus && omnibus.df2 > 0 ? omnibus.ssWithin / omnibus.df2 : null;
   const allValues = groups.flat();
   const rankInfo = rankValues(allValues);

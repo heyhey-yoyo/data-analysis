@@ -40,7 +40,7 @@
           <option value="descriptive">描述统计、正态性与方差齐性</option>
           <option value="correlation">相关性：Pearson + Spearman</option>
           <option value="categorical">分类变量：卡方 + 精确置换</option>
-          <option value="two-group">两独立样本：t / Welch / Mann–Whitney / 精确置换</option>
+          <option value="two-group">两独立样本：t / Welch / Mann–Whitney / 标签置换</option>
           <option value="multi-group">多独立组：ANOVA / Welch / Kruskal–Wallis</option>
         </select>
       </label>
@@ -270,8 +270,8 @@
     <section class="card notes-card" aria-labelledby="notes-title">
       <h2 id="notes-title">方法说明</h2>
       <ul>
-        <li><strong>两独立样本：</strong>同时计算等方差 t、Welch t、Mann–Whitney U 和可行时的精确置换 P。系统会结合所选正态性检验与方差齐性检验给出推荐，但不会隐藏其他结果。</li>
-        <li><strong>多独立组：</strong>同时计算经典单因素 ANOVA、Welch ANOVA 和 Kruskal–Wallis。事后方法可选 Tukey–Kramer、Games–Howell、Fisher LSD、两两 t、Dunn 和两两 Mann–Whitney，并可选 Holm、Bonferroni、Šidák 或 BH-FDR 校正。</li>
+        <li><strong>两独立样本：</strong>同时计算等方差 t、Welch t、Mann–Whitney U 和均值差标签置换检验。标签置换仅在两组分布相同、标签可交换的原假设下为精确检验；仅均值相等但方差或分布形状不同时，不保证精确控制错误率。系统会结合所选正态性检验与方差齐性检验给出推荐，但不会隐藏其他结果。</li>
+        <li><strong>多独立组：</strong>同时计算经典单因素 ANOVA、Welch ANOVA 和 Kruskal–Wallis。事后方法可选 Tukey–Kramer、Games–Howell、protected Fisher LSD（仅总体 ANOVA 显著后执行，两两 P 不单独校正）、两两 t、Dunn 和两两 Mann–Whitney，并可选 Holm、Bonferroni、Šidák 或 BH-FDR 校正。</li>
         <li><strong>相关性：</strong>Pearson 是参数化线性相关；Spearman 是基于秩的非参数相关。自动模式会根据当前选择的正态性诊断推荐矩阵，但两种结果均可切换查看。</li>
         <li><strong>分类变量：</strong>同时提供 Pearson χ² 渐近 P 与固定边际精确置换 P。期望频数较小时优先参考精确结果。</li>
         <li><strong>自动筛查：</strong>正态性自动模式会按样本量、重复值比例等选择 Shapiro 系列、Anderson–Darling、D’Agostino–Pearson 或 Jarque–Bera；方差齐性自动模式在分布较合理时可选 Bartlett，否则优先 Brown–Forsythe。用户可手动改用其他方法。</li>

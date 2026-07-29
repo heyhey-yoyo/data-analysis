@@ -483,7 +483,7 @@ function updateControls() {
   elements.correctionField.classList.toggle('hidden', mode !== 'multi-group');
   const correctionBuiltIn = ['tukey', 'games-howell', 'fisher-lsd'].includes(state.postHocMethod);
   elements.correctionMethod.disabled = correctionBuiltIn;
-  elements.correctionMethod.title = state.postHocMethod === 'fisher-lsd' ? 'Fisher LSD 按定义不做多重校正。' : correctionBuiltIn ? '该方法使用自身的家族错误控制。' : '';
+  elements.correctionMethod.title = state.postHocMethod === 'fisher-lsd' ? 'protected Fisher LSD：仅总体 ANOVA 显著后执行两两比较，两两 P 不单独校正。' : correctionBuiltIn ? '该方法使用自身的家族错误控制。' : '';
   elements.missingField.classList.toggle('hidden', !['overview', 'descriptive', 'group-summary'].includes(mode));
 
   const notes = {
@@ -492,7 +492,7 @@ function updateControls() {
     'group-summary': '只有真正空白的数值单元格可按 0 处理；非法文本始终排除并报警。',
     correlation: '采用逐对完整观测，每一对变量会显示独立的实际样本量 N。',
     categorical: '同时报告 Pearson χ²；固定边际精确枚举有独立的“组合过多”和“超时”状态。',
-    'two-group': '推断检验固定剔除缺失和非法值；精确均值置换在 Worker 中运行，避免阻塞页面。',
+    'two-group': '推断检验固定剔除缺失和非法值；均值差标签置换在 Worker 中运行，避免阻塞页面。',
     'multi-group': '可自动或手动选择正态性与方差诊断；Tukey / Games–Howell 的有限 df 计算不再在 200 处跳变。',
   };
   elements.modeNote.textContent = notes[mode] || '';
@@ -778,9 +778,9 @@ async function analyzeTwoGroup(currentProfiles, version) {
     ['等方差 t', formatNumber(pooled.statistic), formatNumber(pooled.df), pCell(pooled.pValue), `Cohen d = ${formatNumber(pooled.effect)}`, '参数法'],
     ['Welch t', formatNumber(welch.statistic), formatNumber(welch.df), pCell(welch.pValue), '—', '不要求方差相等'],
     ['Mann–Whitney U', `${formatNumber(mw.statistic)}（Z=${formatNumber(mw.z)}）`, '—', pCell(mw.pValue), `秩二列相关 = ${formatNumber(mw.effect)}`, 'U=均值时连续性校正为 0'],
-    ['精确均值置换', '—', '—', '计算中…', '—', 'Web Worker'],
+    ['均值差标签置换', '—', '—', '计算中…', '—', '交换性假设下精确'],
   ];
-  setMainResult('两独立样本检验', '精确置换正在后台计算。推断分析始终剔除缺失和非法格式。', ['方法', '统计量', 'df', 'P', '效应量', '说明'], rows);
+  setMainResult('两独立样本检验', '标签置换检验正在后台计算；它仅在两组分布相同、标签可交换的原假设下精确。推断分析始终剔除缺失和非法格式。', ['方法', '统计量', 'df', 'P', '效应量', '说明'], rows);
   const descriptiveRows = built.labels.map((label, index) => {
     const normal = normality.results[index];
     const summary = summaries[index];
@@ -799,12 +799,12 @@ async function analyzeTwoGroup(currentProfiles, version) {
     if (exact.status === 'invalid') return '不适用';
     return exact.status;
   })();
-  rows[3] = ['精确均值置换', formatNumber(exact.observedDifference), '固定组大小', exact.status === 'exact' ? pCell(exact.pValue) : '—', '均值差', statusText];
+  rows[3] = ['均值差标签置换', formatNumber(exact.observedDifference), '固定组大小', exact.status === 'exact' ? pCell(exact.pValue) : '—', '均值差', statusText];
   setMainResult('两独立样本检验', '多种结果并列展示；方法选择应结合分布、方差、测量尺度和研究设计。', ['方法', '统计量', 'df', 'P', '效应量', '说明'], rows);
 
   if (normality.allPass && variance?.pValue >= ALPHA) setRecommendation('自动建议：正态性诊断未提示明显偏离且方差诊断通过，可优先参考等方差 t；同时报告效应量与置信区间会更完整。');
   else if (normality.allPass) setRecommendation('自动建议：正态性诊断未提示明显偏离，但方差可能不齐，优先参考 Welch t。');
-  else if (normality.anyFail) setRecommendation('自动建议：至少一组的正态性诊断提示偏离，可优先参考 Mann–Whitney 或成功完成的精确置换，并注意它们检验的假设并不完全相同。');
+  else if (normality.anyFail) setRecommendation('自动建议：至少一组的正态性诊断提示偏离，可优先参考 Mann–Whitney。均值差标签置换仅在两组分布相同的原假设下精确；仅均值相等但方差或分布形状不同时，不保证精确控制错误率。');
   else setRecommendation('样本量不足以完成全部正态性诊断；建议结合图形、异常值和研究背景，通常优先参考更稳健的 Welch t，并与秩检验对照。');
 }
 
@@ -850,7 +850,11 @@ function analyzeMultiGroup() {
     tukey: 'Tukey–Kramer', 'games-howell': 'Games–Howell', 'fisher-lsd': 'Fisher LSD', pooled: '两两 pooled t', welch: '两两 Welch t', dunn: 'Dunn', 'mann-whitney': '两两 Mann–Whitney U',
   };
   const postRows = postHoc.map((row) => [row.comparison, formatNumber(row.difference), formatNumber(row.statistic), formatNumber(row.df), pCell(row.pValue), pCell(row.adjustedP), row.correction === 'builtin' ? '学生化极差内置控制' : row.correction === 'none' ? '不校正' : row.correction]);
-  setSecondary(`${methodLabels[method] || method} 事后比较`, 'Tukey 与 Games–Howell 使用学生化极差分布；Fisher LSD 不做多重校正；其他方法使用所选校正。', ['比较', '差值', '统计量', 'df', '原始 P', '校正 P', '校正'], postRows);
+  if (method === 'fisher-lsd' && !postRows.length) {
+    setSecondary('Fisher LSD 事后比较', 'protected Fisher LSD 依赖前置的总体 ANOVA 检验。', ['状态'], [['总体 ANOVA 未达到显著水平，因此未执行 protected Fisher LSD。']]);
+  } else {
+    setSecondary(`${methodLabels[method] || method} 事后比较`, 'Tukey 与 Games–Howell 使用学生化极差分布；protected Fisher LSD 仅在总体 ANOVA 显著后执行，两两 P 不单独校正；其他方法使用所选校正。', ['比较', '差值', '统计量', 'df', '原始 P', '校正 P', '校正'], postRows);
+  }
 
   if (normality.allPass && variance?.pValue >= ALPHA) setRecommendation(`自动建议：优先参考经典 ANOVA，并使用 ${methodLabels[method]}。`);
   else if (normality.allPass) setRecommendation(`自动建议：方差可能不齐，优先参考 Welch ANOVA，并使用 ${methodLabels[method]}。`);

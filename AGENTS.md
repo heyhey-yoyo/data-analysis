@@ -21,8 +21,8 @@
 - `src/worker.mjs`（18 行）：Web Worker，承接 `two-sample-permutation` 与 `fixed-margin-exact` 两种后台精确枚举任务。
 - `_headers`：Cloudflare Pages 安全响应头（CSP 为 `default-src 'self'`、`connect-src 'none'` 等，注意不要引入与之冲突的远程资源或 inline 脚本）。
 - `FIXES.md`：v6→v7 修复矩阵与回归场景清单。
+- `test/core.test.mjs`：统计核心回归测试，`node test/core.test.mjs` 运行（无需部署）。
 - `README.md`：面向用户的部署与使用说明，改动功能时同步更新。
-- `data-analysis-v7-deploy.zip`：部署打包产物，一般不需要修改。
 
 ## 运行与构建
 
@@ -35,8 +35,7 @@ python -m http.server 8000
 
 ## 测试与验证
 
-项目仓库内**没有随附测试文件**（`FIXES.md` 提到的 `core.test.mjs` 未包含在部署包中）。验证修改的方式：
-
+- 回归测试：`node test/core.test.mjs`——覆盖 studentized range 连续性（df=200/201、审计回归点、k=2 对照 t 分布、k=30 对照蒙特卡洛）、Mann–Whitney 中心点校正、protected Fisher LSD 前置条件。修改统计计算后必须运行。
 - 语法检查：`node --check src/core.mjs && node --check src/app.mjs && node --check src/worker.mjs`。
 - 统计逻辑回归：`core.mjs` 全部为纯函数导出，可写 Node 脚本直接 `import` 后断言结果。
 - 浏览器手动验证：载入内置示例数据，确认结果表与诊断渲染正常；重点核对 `FIXES.md` 列出的 14 个回归场景。
