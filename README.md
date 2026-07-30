@@ -4,32 +4,32 @@
 
 ## 主要分析方法
 
-### 描述统计
+**描述统计**
 均值、标准差、中位数、四分位数、峰度、偏度、标准误差与置信区间。
 
-### 正态性检验
+**正态性检验**
 - Shapiro–Wilk
 - Anderson–Darling
 - D'Agostino–Pearson
 - Jarque–Bera
 
-### 方差齐性检验
+**方差齐性检验**
 - Bartlett（正态数据）
 - Levene（中位数，稳健）
 - Brown–Forsythe
 
-### 参数检验
+**参数检验**
 - 独立样本 t 检验（含 Welch 校正）
 - 配对 t 检验
 - 单因素方差分析（ANOVA）
 
-### 非参数检验
+**非参数检验**
 - Mann–Whitney U 检验
 - Wilcoxon 符号秩检验
 - Kruskal–Wallis 检验
 - Friedman 检验
 
-### 事后多重比较
+**事后多重比较**
 - Tukey–Kramer（等方差）
 - Games–Howell（异方差）
 - Fisher LSD（受保护）
@@ -37,7 +37,7 @@
 - 两两 Mann–Whitney
 - 多重校正：Bonferroni、Holm、Benjamini–Hochberg（FDR）
 
-### 其他
+**其他分析方法**
 - 相关分析（Pearson / Spearman / Kendall），逐对报告有效样本量 N
 - 精确置换检验（枚举 / 蒙特卡洛采样）
 - Fisher 精确检验与卡方检验
@@ -90,7 +90,7 @@ node --check src/worker.mjs
 
 ---
 
-> 🤖 AI 编程代理请阅读 [AGENTS.md](./AGENTS.md) 了解完整代码架构与开发约定。
+> AI 编程代理请阅读 [AGENTS.md](./AGENTS.md) 了解完整代码架构与开发约定。
 
 ---
 
