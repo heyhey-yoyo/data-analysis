@@ -1195,12 +1195,10 @@ export function fixedMarginExact(counts, options = {}) {
     }
     const logProb = logConstant - logDenominator;
     if (isTwoByTwo) {
-      // 对数空间比较：概率不大于观测表概率，使用相对容差避免浮点排除等概率表
-      const logTolerance = Math.log1p(1e-12); // ~1e-12 on linear scale
-      totalProbability += Math.exp(logProb);
+      // 对数空间比较：使用相对容差避免浮点排除等概率表
+      const logTolerance = Math.log1p(1e-12);
       logTotalProb = logAddExp(logTotalProb, logProb);
       if (logProb <= logObservedProb + logTolerance) {
-        extremeProbability += Math.exp(logProb);
         logExtremeProb = logAddExp(logExtremeProb, logProb);
       }
     } else {
@@ -1220,6 +1218,8 @@ export function fixedMarginExact(counts, options = {}) {
 
   function fillRow(rowIndex) {
     if (stopped) return;
+    // 刷新后缀容量：remainingColumns 已被前面行消耗
+    refreshSuffixCapacity();
     if (rowIndex === rowCount - 1) {
       let lastRowSum = 0;
       for (let c = 0; c < columnCount; c++) lastRowSum += remainingColumns[c];
