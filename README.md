@@ -1,31 +1,73 @@
-# 基础统计分析工具 v7（修复版）
+# 基础统计分析工具 v7
 
-一个无需后端、无需构建步骤的纯静态统计分析工具。数据在浏览器本地处理。
+一个无需后端、无需构建步骤的纯静态网页统计分析工具。所有数据在浏览器本地计算，**不上传服务器**。
 
-## 直接部署
+## 主要分析方法
 
-部署根目录必须包含：
+### 描述统计
+均值、标准差、中位数、四分位数、峰度、偏度、标准误差与置信区间。
 
-```text
+### 正态性检验
+- Shapiro–Wilk
+- Anderson–Darling
+- D'Agostino–Pearson
+- Jarque–Bera
+
+### 方差齐性检验
+- Bartlett（正态数据）
+- Levene（中位数，稳健）
+- Brown–Forsythe
+
+### 参数检验
+- 独立样本 t 检验（含 Welch 校正）
+- 配对 t 检验
+- 单因素方差分析（ANOVA）
+
+### 非参数检验
+- Mann–Whitney U 检验
+- Wilcoxon 符号秩检验
+- Kruskal–Wallis 检验
+- Friedman 检验
+
+### 事后多重比较
+- Tukey–Kramer（等方差）
+- Games–Howell（异方差）
+- Fisher LSD（受保护）
+- Dunn 检验（非参数）
+- 两两 Mann–Whitney
+- 多重校正：Bonferroni、Holm、Benjamini–Hochberg（FDR）
+
+### 其他
+- 相关分析（Pearson / Spearman / Kendall），逐对报告有效样本量 N
+- 精确置换检验（枚举 / 蒙特卡洛采样）
+- Fisher 精确检验与卡方检验
+- CSV/TSV 导入（自动检测分隔符，支持 UTF-8、GB18030/GBK、Big5 编码）
+
+## 部署
+
+部署根目录必须包含以下文件：
+
+```
 index.html
 styles.css
 src/
-_headers        # Cloudflare Pages 可选但推荐
+_headers        # Cloudflare Pages 推荐
 ```
 
 ### Cloudflare Pages
 
-1. 解压部署包。
-2. 将解压后的目录内容上传，或把该目录提交到 Git 仓库。
-3. Framework preset 选择 `None`。
-4. Build command 留空。
-5. Build output directory 使用 `/`（仓库根目录）。
+1. 将仓库内容上传或提交到 Git。
+2. Framework preset 选择 `None`。
+3. Build command 留空。
+4. Build output directory 使用 `/`（仓库根目录）。
 
 ### GitHub Pages / 任意静态服务器
 
-直接发布目录根部即可。所有资源都使用相对路径，支持子路径部署。
+直接发布目录根部即可。所有资源使用相对路径，支持子路径部署。
 
-本地预览：
+## 本地运行
+
+**请勿直接双击 `index.html`** — ES Modules 不支持 `file://` 协议。请使用静态服务器：
 
 ```bash
 python3 -m http.server 8080
@@ -33,37 +75,31 @@ python3 -m http.server 8080
 
 然后访问 `http://localhost:8080/`。
 
-> 不建议直接双击 `index.html` 通过 `file://` 打开；浏览器可能限制 ES Modules 和 Web Worker。请使用静态服务器。
-
-## 开发与回归测试
-
-只要求 Node.js 20+，没有第三方运行时依赖：
+## 测试
 
 ```bash
-npm run check
-npm test
+node test/core.test.mjs      # 统计核心回归测试
+node --check src/core.mjs    # 语法检查
+node --check src/app.mjs
+node --check src/worker.mjs
 ```
-
-## 已修复的关键问题
-
-- Mann–Whitney U 在 `U == E(U)` 时不再错误施加连续性校正。
-- 保留并可切换 Shapiro 系列、Anderson–Darling、D’Agostino–Pearson、Jarque–Bera，以及 Bartlett、Levene、Brown–Forsythe。
-- 保留 Tukey–Kramer、Games–Howell、Fisher LSD、两两 t、Dunn 与 Mann–Whitney 事后比较。
-- 小数逗号、严格千分位与百分号解析分离，避免静默改写数值。
-- 真正缺失值和非法文本分离；“缺失按 0”不会把录入错误改成 0。
-- CSV/TSV 分隔符检测理解引号；未闭合引号会阻止导入。
-- 学生化极差有限自由度计算不再在 `df=201` 突然切换到无穷自由度。
-- 字段概览分别报告非空值、有效数值、非法格式和缺失值。
-- 相关分析逐对报告实际使用的样本量 N。
-- CSV 导出防止电子表格公式注入。
-- 精确枚举区分“组合数过大”“超时”和数值失败。
-- 大计算移入 Web Worker；编辑表格使用分页并限制文件大小/行数。
-- localStorage 超限或失败时在界面明确提示。
-- 支持 UTF-8、GB18030/GBK 与 Big5 文件读取。
-- 自动迁移旧版 `basic-stat-demo-v6` 本地状态中的模式名、事后方法和校正设置。
-
-完整说明见 [`FIXES.md`](./FIXES.md)。
 
 ## 范围与注意事项
 
-本工具用于探索、教学和快速核对，不替代针对复杂研究设计的专业统计建模。对于临床、监管、科研发表或高风险决策，必须使用成熟统计软件独立复核。
+本工具用于探索、教学和快速核对，**不替代**针对复杂研究设计的专业统计建模。对于临床、监管、科研发表或高风险决策，必须使用成熟统计软件（SPSS、SAS、R、GraphPad Prism 等）独立复核。
+
+---
+
+> 🤖 AI 编程代理请阅读 [AGENTS.md](./AGENTS.md) 了解完整代码架构与开发约定。
+
+---
+
+## AI 维护提醒
+
+> **⚠️ 任何修改此项目的 AI 代理（Claude Code、Cursor、Copilot 等）都必须同步更新本文件与 AGENTS.md。**
+>
+> - 新增分析方法 → 在 README 的分析方法列表中补充说明
+> - 修改统计算法 → 同时更新 AGENTS.md 中的算法描述与 FIXES.md
+> - 新增/删除文件 → 更新两份文档中的文件清单
+> - 修改部署方式 → 同步更新本文部署章节
+> - 保持 **README 面向人类用户**，**AGENTS.md 面向 AI 代理**，两份文件不可互相替代
