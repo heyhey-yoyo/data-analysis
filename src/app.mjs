@@ -19,6 +19,7 @@ import {
   contingencyStatistics,
   toCsv,
 } from './core.mjs';
+import { tokenizeGroupBody } from './data/grouped-parser.mjs';
 
 const STORAGE_KEY = 'basic-stat-tool-v7';
 const LEGACY_STORAGE_KEY = 'basic-stat-demo-v6';
@@ -1005,39 +1006,6 @@ async function handleFile(file) {
   } finally {
     elements.fileInput.value = '';
   }
-}
-
-function tokenizeGroupBody(body, decSep, numOpts) {
-  const spaceTokens = body.split(/[;；\s]+/).filter(Boolean);
-  const commaTokens = decSep === 'comma' ? spaceTokens
-    : body.split(/[;；，\s]+|,(?=\s*[-+]?\d)/).filter(Boolean);
-  const hasSpaceDelim = /[;；\s]/.test(body);
-  if (decSep === 'comma') return { tokens: spaceTokens, warning: null, fatal: false };
-  if (decSep === 'dot') {
-    const pSpace = spaceTokens.map((t) => parseNumeric(t, numOpts));
-    const pComma = commaTokens.map((t) => parseNumeric(t, numOpts));
-    const okSpace = pSpace.every((p) => p.kind === 'number');
-    const okComma = pComma.every((p) => p.kind === 'number');
-    if (okSpace && okComma && spaceTokens.length !== commaTokens.length) {
-      return { tokens: commaTokens, warning: '逗号含义存在歧义，已按列表分隔处理。若为千分位请在数字间加空格。', fatal: false };
-    }
-    if (okSpace) return { tokens: spaceTokens, warning: null, fatal: false };
-    return { tokens: commaTokens, warning: null, fatal: false };
-  }
-  // auto: 双候选比较
-  const pA = spaceTokens.map((t) => parseNumeric(t, numOpts));
-  const pB = commaTokens.map((t) => parseNumeric(t, numOpts));
-  const okA = pA.every((p) => p.kind === 'number');
-  const okB = pB.every((p) => p.kind === 'number');
-  if (okA && okB && spaceTokens.length !== commaTokens.length) {
-    if (!hasSpaceDelim) {
-      // 仅有逗号无空格 → 无法判断是小数点还是分隔符
-      return { tokens: spaceTokens, warning: '逗号含义存在歧义（小数点或分隔符），请在小数格式中选择"小数点"或"小数逗号"后重试。', fatal: true };
-    }
-    return { tokens: spaceTokens, warning: '逗号含义存在歧义，已按空格分隔解析。若逗号是分隔符请在数字间加空格。', fatal: false };
-  }
-  if (!okA && !okB) return { tokens: spaceTokens, warning: null, fatal: false };
-  return { tokens: okA ? spaceTokens : commaTokens, warning: null, fatal: false };
 }
 
 function parseGroupedText(text) {
