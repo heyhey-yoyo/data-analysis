@@ -461,8 +461,8 @@ function fillSelect(select, options, current) {
   if (options.includes(current)) select.value = current;
 }
 
-function refreshSelectors() {
-  const currentProfiles = profiles();
+function refreshSelectors(cachedProfiles) {
+  const currentProfiles = cachedProfiles || profiles();
   const numericHeaders = currentProfiles.filter((profile) => profile.eligibleForNumericAnalysis).map((profile) => profile.header);
   const valueOptions = numericHeaders.length ? numericHeaders : [];
   if (!valueOptions.includes(state.valueColumn)) state.valueColumn = valueOptions[0] || '';
@@ -523,16 +523,16 @@ function updateControls() {
 function scheduleAnalysis() {
   clearTimeout(analysisTimer);
   analysisTimer = setTimeout(() => {
-    // 仅在字段资格变化时刷新选择器（按签名缓存）
+    // 仅扫描一次全表，后续复用
     const currentProfiles = profiles();
     const selectorSignature = currentProfiles
       .map((p) => `${p.header}:${p.eligibleForNumericAnalysis ? 1 : 0}`)
       .join('|');
     if (selectorSignature !== lastSelectorSignature) {
       lastSelectorSignature = selectorSignature;
-      refreshSelectors();
+      refreshSelectors(currentProfiles);
     }
-    analyze();
+    analyze(currentProfiles);
   }, 180);
 }
 
@@ -600,11 +600,11 @@ function qualityAlerts(currentProfiles) {
   return alerts;
 }
 
-async function analyze() {
+async function analyze(cachedProfiles) {
   const version = ++analysisVersion;
   // 每次分析开始时无条件取消旧重任务（防止悬浮 Worker 继续占 CPU）
   cancelCurrentHeavyTask();
-  const currentProfiles = profiles();
+  const currentProfiles = cachedProfiles || profiles();
   renderQuality(currentProfiles);
   setAlerts(qualityAlerts(currentProfiles));
   setRecommendation('');
@@ -1003,8 +1003,10 @@ function parseGroupedText(text) {
     if (!match) { allColon = false; return; }
     const label = match[1].trim();
     const body = match[2].trim();
-    const tokens = /[;；]/.test(body)
-      ? body.split(/[;；，\s]+/).filter(Boolean)
+    // 小数逗号模式：逗号是小数点，只用空格/分号分隔
+    const isCommaDecimal = state.decimalSeparator === 'comma';
+    const tokens = /[;；]/.test(body) || isCommaDecimal
+      ? body.split(/[;；\s]+/).filter(Boolean)
       : body.split(/[，\s]+|,(?=\s*[-+]?\d)/).filter(Boolean);
     let invalidCount = 0;
     const invalidExamples = [];

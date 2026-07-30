@@ -1008,6 +1008,7 @@ function simpsonIntegral(fn, start, end, intervals) {
 }
 
 const studentizedRangeCache = new Map();
+const MAX_SR_CACHE_SIZE = 10000;
 export function studentizedRangeInfiniteCdf(q, groupCount) {
   if (!(q > 0)) return 0;
   if (q >= 14) return 1;
@@ -1038,6 +1039,10 @@ export function studentizedRangeCdf(q, groupCount, degreesOfFreedom) {
     }, 0, upper, intervals);
   }
   result = clampProbability(result);
+  if (studentizedRangeCache.size >= MAX_SR_CACHE_SIZE) {
+    // 超过容量上限时清空缓存（简单策略，避免内存无限增长）
+    studentizedRangeCache.clear();
+  }
   studentizedRangeCache.set(cacheKey, result);
   return result;
 }
@@ -1099,7 +1104,7 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
         pValue = result.pValue;
       } else if (method === 'mann-whitney') {
         const result = mannWhitney(groups[i], groups[j]);
-        difference = a.median - b.median;
+        difference = result.effect; // 秩二列相关，非中位数差
         statistic = result.statistic;
         pValue = result.pValue;
       } else if (method === 'dunn') {
@@ -1356,7 +1361,9 @@ export function safeCsvCell(value) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   let text = String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  // 合法数字字符串不加引号前缀（负数如 "-2.35" 不应变为文本）
+  const isNumericString = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(text);
+  if (!isNumericString && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
