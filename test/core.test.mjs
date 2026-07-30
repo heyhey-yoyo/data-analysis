@@ -214,6 +214,26 @@ test('B1-2 Fisher [[50,0],[0,50]] 极小 P 保持精确', () => {
   assert.ok(result.pValue > 0, `P = ${result.pValue}，应大于 0`);
 });
 
+// ---------- B2-1：小样本精确 P ----------
+
+test('B2-1 Spearman n=3 完全单调 → 精确双侧 P = 1/3', () => {
+  const result = spearmanCorrelation([1, 2, 3], [10, 20, 30]);
+  assert.equal(result.pValueType, 'exact');
+  assert.ok(Math.abs(result.pValue - 1 / 3) < 0.001, `P = ${result.pValue}`);
+});
+
+test('B2-1 Mann-Whitney n=2 vs n=2 精确 P', () => {
+  const result = mannWhitney([1, 2], [3, 4]);
+  assert.equal(result.pValueType, 'exact');
+  // C(4,2)=6 种组合，两端各 1 种 → P = 2/6 = 1/3
+  assert.ok(Math.abs(result.pValue - 1 / 3) < 0.001, `P = ${result.pValue}`);
+});
+
+test('B2-1 Mann-Whitney 有 ties 时回退渐近', () => {
+  const result = mannWhitney([1, 2], [2, 3]);
+  assert.equal(result.pValueType, 'asymptotic');
+});
+
 // ---------- 汇总 ----------
 
 console.log(`\n${passed} 通过，${failures.length} 失败`);

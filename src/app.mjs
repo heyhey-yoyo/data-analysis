@@ -744,11 +744,7 @@ function analyzeCorrelation(currentProfiles) {
     { value: pairCounts.length ? Math.max(...pairCounts) : '—', label: '最大逐对 N' },
   ]);
   setMainResult('相关矩阵（长表）', '每一行使用该变量对的完整观测，并单独显示实际 N。', ['变量 A', '变量 B', '方法', '相关系数', 'P', '逐对 N'], rows.length ? rows : [['—', '—', '—', '—', '—', '不足 2 个可分析数值字段']]);
-  const normalities = numericHeaders.map((header) => runNormalityTest(numericSeries(header).filter(Number.isFinite), state.normalityMethod));
-  const allNormal = normalities.length >= 2 && normalities.every((result) => result.status === 'pass');
-  setRecommendation(allNormal
-    ? '所选正态性诊断均未提示明显偏离，可优先参考 Pearson；仍应检查线性关系和异常值。逐对 N 不一致时应谨慎比较系数。'
-    : '至少一个字段偏离正态或无法可靠判断，可优先参考 Spearman；同时检查单调性、异常值和逐对 N。');
+  setRecommendation('自动展示 Pearson 与 Spearman 两种结果。正态性诊断仅供辅助参考，不据此自动切换方法。选择时请结合散点图检查线性/单调关系、异常值和数据分布。逐对 N 不一致时应谨慎比较系数。');
 }
 
 async function analyzeCategorical(currentProfiles, version) {
@@ -921,7 +917,11 @@ function analyzeMultiGroup() {
     setSecondary(`${methodLabels[method] || method} 事后比较`, 'Tukey 与 Games–Howell 使用学生化极差分布；protected Fisher LSD 仅在总体 ANOVA 显著后执行，两两 P 不单独校正；其他方法使用所选校正。', ['比较', '差值', '统计量', 'df', '原始 P', '校正 P', '校正'], postRows);
   }
 
-  setRecommendation(`自动建议：Welch ANOVA 不要求方差相等，推荐优先参考。事后比较默认使用 Games–Howell（异方差稳健），当前方法为 ${methodLabels[method]}。正态性与方差诊断仅为参考信息。如需非参数检验请手动选择。`);
+  if (!welch) {
+    setRecommendation(`注意：Welch ANOVA 在当前数据上无法计算（可能有组方差为零或样本量不足），已改为经典 ANOVA。事后比较默认使用 ${methodLabels[method]}。`);
+  } else {
+    setRecommendation(`自动建议：Welch ANOVA 不要求方差相等，推荐优先参考。事后比较默认使用 Games–Howell（异方差稳健），当前方法为 ${methodLabels[method]}。如需非参数检验请手动选择。`);
+  }
 }
 
 async function decodeFile(file, encoding) {

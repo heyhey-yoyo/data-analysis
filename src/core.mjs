@@ -563,7 +563,80 @@ export function spearmanCorrelation(valuesA, valuesB) {
     }
   }
   if (cleanA.length < 3) return null;
-  return pearsonCorrelation(rankValues(cleanA).ranks, rankValues(cleanB).ranks);
+  const aRanks = rankValues(cleanA);
+  const bRanks = rankValues(cleanB);
+  const result = pearsonCorrelation(aRanks.ranks, bRanks.ranks);
+  if (!result) return null;
+  // 小样本无 ties → 精确排列 P
+  const noTies = aRanks.tieCounts.length === 0 && bRanks.tieCounts.length === 0;
+  const n = cleanA.length;
+  if (noTies && n <= 8) {
+    const exact = spearmanExactP(aRanks.ranks, bRanks.ranks);
+    if (exact && exact.status === 'exact') {
+      return { ...result, exactPValue: exact.pValue, pValue: exact.pValue, pValueType: 'exact' };
+    }
+  }
+  return { ...result, pValueType: 'asymptotic' };
+}
+
+// 小样本 Spearman 精确双侧 P（无 ties，n ≤ 8 排列枚举）
+function spearmanExactP(ranksA, ranksB) {
+  const n = ranksA.length;
+  const meanRank = (n + 1) / 2;
+  let cross = 0, ss = 0;
+  for (let i = 0; i < n; i++) {
+    const dA = ranksA[i] - meanRank, dB = ranksB[i] - meanRank;
+    cross += dA * dB; ss += dA * dA;
+  }
+  const obsAbs = Math.abs(cross / ss);
+  const used = new Array(n).fill(false);
+  const perm = new Array(n);
+  let total = 0, extreme = 0;
+  function enumPerm(i) {
+    if (i === n) {
+      let pc = 0;
+      for (let j = 0; j < n; j++) pc += (ranksB[j] - meanRank) * (perm[j] - meanRank);
+      total++;
+      if (Math.abs(pc / ss) + 1e-12 >= obsAbs) extreme++;
+      return;
+    }
+    for (let j = 0; j < n; j++) {
+      if (used[j]) continue;
+      used[j] = true; perm[i] = j + 1; enumPerm(i + 1); used[j] = false;
+    }
+  }
+  enumPerm(0);
+  return { pValue: extreme / total, status: 'exact' };
+}
+
+// 小样本 Mann-Whitney 精确双侧 P（无 ties，组合计数 ≤ 200k）
+function mannWhitneyExactP(n1, n2, uObserved) {
+  const totalN = n1 + n2;
+  const totalComb = combinationCountCapped(totalN, Math.min(n1, n2), 200001);
+  if (totalComb.tooLarge) return null;
+  // 递归组合枚举
+  const ranks = Array.from({ length: totalN }, (_, i) => i + 1);
+  const correction = n1 * (n1 + 1) / 2;
+  const meanU = n1 * n2 / 2;
+  const obsDiff = Math.abs(uObserved - meanU);
+  let total = 0, extreme = 0;
+  const started = Date.now();
+  function enumerate(idx, selected, sum) {
+    if (selected === n1) {
+      const u = sum - correction;
+      total++;
+      if (Math.abs(u - meanU) + 1e-12 >= obsDiff) extreme++;
+      return;
+    }
+    const needed = n1 - selected;
+    const last = totalN - needed;
+    for (let j = idx; j <= last; j++) {
+      enumerate(j + 1, selected + 1, sum + ranks[j]);
+    }
+  }
+  enumerate(0, 0, 0);
+  if (!total) return null;
+  return { pValue: extreme / total, status: 'exact' };
 }
 
 export function distributionMoments(values) {
@@ -850,7 +923,16 @@ export function mannWhitney(valuesA, valuesB) {
   const continuity = delta < 0 ? 0.5 : delta > 0 ? -0.5 : 0;
   const z = varianceU > 0 ? (delta + continuity) / Math.sqrt(varianceU) : 0;
   const rankBiserial = 2 * u1 / (n1 * n2) - 1;
-  return { statistic: u, u1, u2, z, pValue: normalTwoSidedP(z), effect: rankBiserial };
+  const asymptoticP = normalTwoSidedP(z);
+  // 小样本无 ties → 精确组合枚举 P
+  const noTies = rankInfo.tieCounts.length === 0;
+  if (noTies && n1 >= 2 && n2 >= 2 && n1 + n2 <= 20) {
+    const exact = mannWhitneyExactP(n1, n2, u);
+    if (exact && exact.status === 'exact') {
+      return { statistic: u, u1, u2, z, pValue: exact.pValue, pValueType: 'exact', effect: rankBiserial };
+    }
+  }
+  return { statistic: u, u1, u2, z, pValue: asymptoticP, pValueType: 'asymptotic', effect: rankBiserial };
 }
 
 export function welchAnova(groups) {
