@@ -1074,6 +1074,8 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
       let df = null;
       let pValue = null;
       let difference = a.mean - b.mean;
+      let estimateType = 'mean-difference';
+      let pValueType = 'asymptotic';
       let builtin = false;
       if (method === 'tukey' && mse !== null) {
         const se = Math.sqrt(mse / 2 * (1 / a.count + 1 / b.count));
@@ -1104,7 +1106,9 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
         pValue = result.pValue;
       } else if (method === 'mann-whitney') {
         const result = mannWhitney(groups[i], groups[j]);
-        difference = result.effect; // 秩二列相关，非中位数差
+        difference = result.effect;
+        estimateType = 'rank-biserial-correlation';
+        pValueType = result.pValueType || 'asymptotic';
         statistic = result.statistic;
         pValue = result.pValue;
       } else if (method === 'dunn') {
@@ -1116,6 +1120,7 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
         const se = Math.sqrt(dunnVariance * (1 / ranksA.length + 1 / ranksB.length));
         statistic = se > 0 ? difference / se : 0;
         pValue = normalTwoSidedP(statistic);
+        estimateType = 'mean-rank-difference';
       } else {
         const result = welchTTest(groups[i], groups[j]);
         if (!result) continue;
@@ -1123,7 +1128,7 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
         df = result.df;
         pValue = result.pValue;
       }
-      rows.push({ comparison: `${labels[i]} vs ${labels[j]}`, difference, statistic, df, pValue, adjustedP: pValue, correction: builtin ? 'builtin' : appliedCorrection });
+      rows.push({ comparison: `${labels[i]} vs ${labels[j]}`, difference, estimateType, pValueType, statistic, df, pValue, adjustedP: pValue, correction: builtin ? 'builtin' : appliedCorrection });
     }
   }
   if (!rows.length || rows.every((row) => row.correction === 'builtin')) return rows;
