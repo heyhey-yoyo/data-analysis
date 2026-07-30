@@ -175,6 +175,45 @@ test('B2-2 高动态范围均值不溢出', () => {
   assert.ok(result.mean > 0, `均值应为正，得到 ${result.mean}`);
 });
 
+// ---------- B1-1：pooled t 与 Fisher LSD 分离 ----------
+
+test('B1-1 pooled t 使用两组合并方差不受第三组影响', () => {
+  // A, B 两组恒等，加入差异极大的 C 组
+  const a = [1, 2, 3, 4, 5];
+  const bSame = [1, 2, 3, 4, 5];
+  const cDifferent = [100, 200, 300, 400, 500];
+  // 三组 pooled t (A vs B) 应与两组 pooled t 一致
+  const pooled3 = postHocComparisons(['A', 'B', 'C'], [a, bSame, cDifferent], 'pooled', 'none');
+  const pooled2 = postHocComparisons(['A', 'B'], [a, bSame], 'pooled', 'none');
+  assert.equal(pooled3[0].comparison, 'A vs B');
+  assert.equal(pooled2[0].comparison, 'A vs B');
+  assert.ok(Math.abs(pooled3[0].statistic - pooled2[0].statistic) < 1e-10,
+    `三组 pooled t=${pooled3[0].statistic}，两组 pooled t=${pooled2[0].statistic}，应一致`);
+  assert.ok(Math.abs(pooled3[0].pValue - pooled2[0].pValue) < 1e-10,
+    `三组 P=${pooled3[0].pValue}，两组 P=${pooled2[0].pValue}，应一致`);
+});
+
+// ---------- B1-2：Fisher 双侧等概率判断 ----------
+
+test('B1-2 Fisher [[0,2],[2,3]] 双侧 P = 1（等概率表）', () => {
+  const result = fixedMarginExact([[0, 2], [2, 3]]);
+  assert.equal(result.status, 'exact');
+  assert.ok(Math.abs(result.pValue - 1) < 1e-6, `P = ${result.pValue}，期望 ≈ 1`);
+});
+
+test('B1-2 Fisher [[8,2],[1,1]] 双侧 P ≈ 0.454545', () => {
+  const result = fixedMarginExact([[8, 2], [1, 1]]);
+  assert.equal(result.status, 'exact');
+  assert.ok(Math.abs(result.pValue - 0.454545) < 0.001, `P = ${result.pValue}`);
+});
+
+test('B1-2 Fisher [[50,0],[0,50]] 极小 P 保持精确', () => {
+  const result = fixedMarginExact([[50, 0], [0, 50]]);
+  assert.equal(result.status, 'exact');
+  assert.ok(result.pValue < 1e-10, `P = ${result.pValue}，应极小`);
+  assert.ok(result.pValue > 0, `P = ${result.pValue}，应大于 0`);
+});
+
 // ---------- 汇总 ----------
 
 console.log(`\n${passed} 通过，${failures.length} 失败`);

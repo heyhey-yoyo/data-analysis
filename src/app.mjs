@@ -78,44 +78,54 @@ let currentWorker = null;
 let currentWorkerReject = null;
 let currentWorkerTaskId = 0;
 
-function runHeavyTask(task, payload) {
-  // 终止旧 Worker，对其 Promise reject AbortError
-  if (currentWorker) {
-    const oldReject = currentWorkerReject;
-    currentWorker.terminate();
-    currentWorker = null;
-    currentWorkerReject = null;
-    if (oldReject) {
-      const err = new DOMException('已取消', 'AbortError');
-      oldReject(err);
-    }
+function cancelCurrentHeavyTask() {
+  if (!currentWorker) return;
+  const oldReject = currentWorkerReject;
+  currentWorker.terminate();
+  currentWorker = null;
+  currentWorkerReject = null;
+  if (oldReject) {
+    oldReject(new DOMException('任务已取消', 'AbortError'));
   }
+}
+
+function runHeavyTask(task, payload) {
+  // 取消已有的重任务
+  cancelCurrentHeavyTask();
 
   return new Promise((resolve, reject) => {
+    let worker = null;
     try {
-      const worker = new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });
-      currentWorker = worker;
-      currentWorkerReject = reject;
-      const id = ++currentWorkerTaskId;
+      worker = new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });
+    } catch (e) {
+      reject(new Error('Worker 创建失败'));
+      return;
+    }
 
-      worker.addEventListener('message', (event) => {
-        if (event.data?.id !== id) return;
-        worker.terminate();
-        if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
-        if (event.data.ok) resolve(event.data.result);
-        else reject(new Error(event.data.error || 'Worker 计算失败'));
-      });
+    currentWorker = worker;
+    currentWorkerReject = reject;
+    const id = ++currentWorkerTaskId;
 
-      worker.addEventListener('error', () => {
-        worker.terminate();
-        if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
-        reject(new Error('Worker 不可用'));
-      });
+    worker.addEventListener('message', (event) => {
+      if (event.data?.id !== id) return;
+      worker.terminate();
+      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
+      if (event.data.ok) resolve(event.data.result);
+      else reject(new Error(event.data.error || 'Worker 计算失败'));
+    });
 
+    worker.addEventListener('error', () => {
+      worker.terminate();
+      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
+      reject(new Error('Worker 不可用'));
+    });
+
+    try {
       worker.postMessage({ id, task, payload });
     } catch (e) {
+      worker.terminate();
       if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
-      reject(new Error('Worker 创建失败'));
+      reject(new Error('Worker 通信失败'));
     }
   });
 }
@@ -516,6 +526,9 @@ function scheduleAnalysis() {
 function buildGroups({ allowMissingZero = false } = {}) {
   const groupIndex = state.headers.indexOf(state.groupColumn);
   const valueIndex = state.headers.indexOf(state.valueColumn);
+  if (groupIndex >= 0 && groupIndex === valueIndex && state.analysisMode !== 'descriptive') {
+    return { labels: [], groups: [], excludedMissing: 0, excludedInvalid: 0, excludedGroup: 0, error: '组别字段不能与数值字段相同' };
+  }
   const labels = [];
   const map = new Map();
   let excludedMissing = 0;
@@ -542,6 +555,9 @@ function buildGroups({ allowMissingZero = false } = {}) {
 function buildContingency() {
   const aIndex = state.headers.indexOf(state.categoryColumnA);
   const bIndex = state.headers.indexOf(state.categoryColumnB);
+  if (aIndex === bIndex) {
+    return { rowLabels: [], columnLabels: [], counts: [], excluded: 0, n: 0, error: '两个分类字段不能相同' };
+  }
   const rowLabels = [];
   const columnLabels = [];
   const rowMap = new Map();
@@ -573,6 +589,10 @@ function qualityAlerts(currentProfiles) {
 
 async function analyze() {
   const version = ++analysisVersion;
+  // 切换到普通分析模式时取消后台重任务
+  if (state.analysisMode !== 'categorical' && state.analysisMode !== 'two-group') {
+    cancelCurrentHeavyTask();
+  }
   const currentProfiles = profiles();
   renderQuality(currentProfiles);
   setAlerts(qualityAlerts(currentProfiles));
@@ -733,6 +753,11 @@ function analyzeCorrelation(currentProfiles) {
 
 async function analyzeCategorical(currentProfiles, version) {
   const built = buildContingency();
+  if (built.error) {
+    setSummaryCards([]);
+    setMainResult('分类变量关联', '', ['状态'], [[built.error]]);
+    return;
+  }
   const summary = contingencyStatistics(built.counts);
   if (!summary) {
     setSummaryCards([{ value: built.n, label: '完整观测 N' }]);
@@ -786,6 +811,11 @@ function normalitySummary(groups) {
 
 async function analyzeTwoGroup(currentProfiles, version) {
   const built = buildGroups();
+  if (built.error) {
+    setSummaryCards([]);
+    setMainResult('两独立样本', '', ['状态'], [[built.error]]);
+    return;
+  }
   if (built.labels.length !== 2 || built.groups.some((group) => group.length < 2)) {
     setSummaryCards([{ value: built.labels.length, label: '有效组数' }]);
     setMainResult('两独立样本', '', ['状态'], [['需要恰好 2 个组，且每组至少 2 个有效数值。']]);
@@ -842,6 +872,11 @@ async function analyzeTwoGroup(currentProfiles, version) {
 
 function analyzeMultiGroup() {
   const built = buildGroups();
+  if (built.error) {
+    setSummaryCards([]);
+    setMainResult('多独立组', '', ['状态'], [[built.error]]);
+    return;
+  }
   if (built.labels.length < 3 || built.groups.some((group) => group.length < 2)) {
     setSummaryCards([{ value: built.labels.length, label: '有效组数' }]);
     setMainResult('多独立组', '', ['状态'], [['需要至少 3 个组，且每组至少 2 个有效数值。']]);

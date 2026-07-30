@@ -1001,12 +1001,18 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
         df = denominator > 0 ? (termA + termB) ** 2 / denominator : a.count + b.count - 2;
         pValue = statistic === Infinity ? 0 : 1 - studentizedRangeCdf(statistic, groups.length, df);
         builtin = true;
-      } else if (method === 'pooled' || method === 'fisher-lsd') {
+      } else if (method === 'fisher-lsd') {
         if (mse === null) continue;
         const se = Math.sqrt(mse * (1 / a.count + 1 / b.count));
         statistic = se === 0 ? (difference === 0 ? 0 : Infinity) : difference / se;
         df = omnibus.df2;
         pValue = statistic === Infinity ? 0 : tTwoSidedP(statistic, df);
+      } else if (method === 'pooled') {
+        const result = pooledTTest(groups[i], groups[j]);
+        if (!result) continue;
+        statistic = result.statistic;
+        df = result.df;
+        pValue = result.pValue;
       } else if (method === 'mann-whitney') {
         const result = mannWhitney(groups[i], groups[j]);
         difference = a.median - b.median;
@@ -1189,10 +1195,11 @@ export function fixedMarginExact(counts, options = {}) {
     }
     const logProb = logConstant - logDenominator;
     if (isTwoByTwo) {
-      // 对数空间比较：概率不大于观测表概率（无固定容差）
+      // 对数空间比较：概率不大于观测表概率，使用相对容差避免浮点排除等概率表
+      const logTolerance = Math.log1p(1e-12); // ~1e-12 on linear scale
       totalProbability += Math.exp(logProb);
       logTotalProb = logAddExp(logTotalProb, logProb);
-      if (logProb <= logObservedProb) {
+      if (logProb <= logObservedProb + logTolerance) {
         extremeProbability += Math.exp(logProb);
         logExtremeProb = logAddExp(logExtremeProb, logProb);
       }
@@ -1206,7 +1213,8 @@ export function fixedMarginExact(counts, options = {}) {
           statistic += diff * diff * expectedRecipCache[r][c];
         }
       }
-      if (statistic >= observed) extremeProbability += Math.exp(logProb);
+      const tolerance = Math.max(1, observed) * 1e-12;
+      if (statistic + tolerance >= observed) extremeProbability += Math.exp(logProb);
     }
   };
 
@@ -1249,9 +1257,15 @@ export function fixedMarginExact(counts, options = {}) {
 
   fillRow(0);
   if (stopped) return { status: stopped, pValue: null, tableCount, observedStatistic: observed };
+  // 2×2 使用对数空间累加避免下溢，r×c 使用线性累加
+  if (isTwoByTwo) {
+    if (logTotalProb === -Infinity) return { status: 'enumeration-failed', pValue: null, tableCount, observedStatistic: observed };
+    const pValue = clampProbability(Math.exp(logExtremeProb - logTotalProb));
+    return { status: 'exact', pValue, tableCount, observedStatistic: observed, method: 'fisher' };
+  }
   if (!(totalProbability > 0)) return { status: 'enumeration-failed', pValue: null, tableCount, observedStatistic: observed };
   const pValue = clampProbability(extremeProbability / totalProbability);
-  return { status: 'exact', pValue, tableCount, observedStatistic: observed, method: isTwoByTwo ? 'fisher' : 'pearson-chi-squared-exact' };
+  return { status: 'exact', pValue, tableCount, observedStatistic: observed, method: 'pearson-chi-squared-exact' };
 }
 
 export function safeCsvCell(value) {
