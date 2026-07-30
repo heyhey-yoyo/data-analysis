@@ -72,6 +72,7 @@ let analysisTimer = null;
 let saveTimer = null;
 let analysisVersion = 0;
 let storageWarning = '';
+let lastSelectorSignature = '';
 let latestResult = { headers: [], rows: [] };
 
 let currentWorker = null;
@@ -463,8 +464,9 @@ function fillSelect(select, options, current) {
 function refreshSelectors() {
   const currentProfiles = profiles();
   const numericHeaders = currentProfiles.filter((profile) => profile.eligibleForNumericAnalysis).map((profile) => profile.header);
-  const valueOptions = numericHeaders.length ? numericHeaders : state.headers;
+  const valueOptions = numericHeaders.length ? numericHeaders : [];
   if (!valueOptions.includes(state.valueColumn)) state.valueColumn = valueOptions[0] || '';
+  if (!valueOptions.length) state.valueColumn = '';
   if (!state.headers.includes(state.groupColumn)) state.groupColumn = state.headers.find((header) => header !== state.valueColumn) || state.headers[0] || '';
   if (!state.headers.includes(state.categoryColumnA)) state.categoryColumnA = state.headers[0] || '';
   if (!state.headers.includes(state.categoryColumnB) || state.categoryColumnB === state.categoryColumnA) {
@@ -520,7 +522,18 @@ function updateControls() {
 
 function scheduleAnalysis() {
   clearTimeout(analysisTimer);
-  analysisTimer = setTimeout(() => analyze(), 180);
+  analysisTimer = setTimeout(() => {
+    // 仅在字段资格变化时刷新选择器（按签名缓存）
+    const currentProfiles = profiles();
+    const selectorSignature = currentProfiles
+      .map((p) => `${p.header}:${p.eligibleForNumericAnalysis ? 1 : 0}`)
+      .join('|');
+    if (selectorSignature !== lastSelectorSignature) {
+      lastSelectorSignature = selectorSignature;
+      refreshSelectors();
+    }
+    analyze();
+  }, 180);
 }
 
 function buildGroups({ allowMissingZero = false } = {}) {
@@ -589,10 +602,8 @@ function qualityAlerts(currentProfiles) {
 
 async function analyze() {
   const version = ++analysisVersion;
-  // 切换到普通分析模式时取消后台重任务
-  if (state.analysisMode !== 'categorical' && state.analysisMode !== 'two-group') {
-    cancelCurrentHeavyTask();
-  }
+  // 每次分析开始时无条件取消旧重任务（防止悬浮 Worker 继续占 CPU）
+  cancelCurrentHeavyTask();
   const currentProfiles = profiles();
   renderQuality(currentProfiles);
   setAlerts(qualityAlerts(currentProfiles));
@@ -730,7 +741,7 @@ function analyzeCorrelation(currentProfiles) {
           if (result.status === 'constant-input') {
             rows.push([numericHeaders[i], numericHeaders[j], 'Spearman', '—（常量输入）', '—', result.n]);
           } else {
-            rows.push([numericHeaders[i], numericHeaders[j], 'Spearman', formatNumber(result.coefficient), pCell(result.pValue), result.n]);
+            rows.push([numericHeaders[i], numericHeaders[j], 'Spearman' + (result.pValueType === 'exact' ? '（精确 P）' : '（渐近 P）'), formatNumber(result.coefficient), pCell(result.pValue), result.n]);
           }
         }
       }
@@ -792,7 +803,7 @@ async function analyzeCategorical(currentProfiles, version) {
   const exactMethodLabel = exact.method === 'fisher' ? 'Fisher 精确 P' : '固定边际精确 Pearson χ² 检验';
   setMainResult('分类变量关联检验', 'Pearson χ² 为渐近检验；期望频数较小时优先参考成功完成的固定边际精确结果。', ['方法', '统计量', 'df', 'P', '效应 / 状态'], [
     ['Pearson χ²', formatNumber(summary.statistic), summary.df, pCell(summary.pValue), `Cramér V = ${formatNumber(summary.cramerV)}`],
-    [exactMethodLabel, formatNumber(summary.statistic), '固定边际', exact.status === 'exact' ? pCell(exact.pValue) : '—', statusText],
+    [exactMethodLabel, '—', '固定边际', exact.status === 'exact' ? pCell(exact.pValue) : '—', statusText],
   ]);
   if (summary.lowExpected > 0) setRecommendation('存在期望频数低于 5 的单元格；若精确枚举成功，优先参考精确 P，并结合效应量与研究设计。');
 }
@@ -832,7 +843,7 @@ async function analyzeTwoGroup(currentProfiles, version) {
   const rows = [
     ['Welch t（推荐）', formatNumber(welch.statistic), formatNumber(welch.df), pCell(welch.pValue), '—', '不要求方差相等'],
     ['等方差 t', formatNumber(pooled.statistic), formatNumber(pooled.df), pCell(pooled.pValue), `Cohen d = ${formatNumber(pooled.effect)}`, '参数法'],
-    ['Mann–Whitney U', `${formatNumber(mw.statistic)}（Z=${formatNumber(mw.z)}）`, '—', pCell(mw.pValue), `秩二列相关 = ${formatNumber(mw.effect)}`, 'U=均值时连续性校正为 0'],
+    ['Mann–Whitney U' + (mw.pValueType === 'exact' ? '（精确 P）' : '（渐近 P）'), `${formatNumber(mw.statistic)}（Z=${formatNumber(mw.z)}）`, '—', pCell(mw.pValue), `秩二列相关 = ${formatNumber(mw.effect)}`, 'U=均值时连续性校正为 0'],
     ['均值差标签置换', '—', '—', '计算中…', '—', '交换性假设下精确'],
   ];
   setMainResult('两独立样本检验', '标签置换检验正在后台计算；它仅在两组分布相同、标签可交换的原假设下精确。推断分析始终剔除缺失和非法格式。', ['方法', '统计量', 'df', 'P', '效应量', '说明'], rows);
@@ -959,7 +970,13 @@ function applyImportedData(parsed, message) {
   saveState();
   analyze();
   const nonFatal = parsed.errors.filter((error) => !error.fatal);
-  setEditorStatus(`${message}；识别分隔符：${parsed.delimiter === '\t' ? 'Tab' : parsed.delimiter}${nonFatal.length ? `；另有 ${nonFatal.length} 个格式警告` : ''}`);
+  let statusMsg = `${message}；识别分隔符：${parsed.delimiter === '\t' ? 'Tab' : parsed.delimiter}`;
+  if (nonFatal.length) {
+    statusMsg += `；${nonFatal.length} 个格式警告`;
+    const firstDetail = nonFatal.find((e) => e.message)?.message;
+    if (firstDetail) statusMsg += `：${firstDetail}`;
+  }
+  setEditorStatus(statusMsg);
   return true;
 }
 
@@ -1020,8 +1037,8 @@ function parseGroupedText(text) {
   });
   if (wideInvalid > 0) errors.push({ message: `宽表中有 ${wideInvalid} 个值无法解析为数字，已排除` });
   return rows.length
-    ? { headers: ['组别', '数值'], rows, delimiter: wide.delimiter, errors: wide.errors }
-    : { headers: [], rows: [], delimiter: wide.delimiter, errors: [{ fatal: true, message: '未识别到分组数值' }] };
+    ? { headers: ['组别', '数值'], rows, delimiter: wide.delimiter, errors: [...wide.errors, ...errors] }
+    : { headers: [], rows: [], delimiter: wide.delimiter, errors: [...wide.errors, ...errors, { fatal: true, message: '未识别到分组数值' }] };
 }
 
 function loadExample(key) {

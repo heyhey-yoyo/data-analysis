@@ -288,7 +288,7 @@ export function columnProfile(values, numberOptions = {}) {
   });
   const nonEmpty = values.length - missing;
   const numericRatio = nonEmpty ? numbers.length / nonEmpty : 0;
-  const eligibleForNumericAnalysis = numbers.length >= 3;
+  const eligibleForNumericAnalysis = numbers.length >= 3 && numericRatio >= 0.8;
   return {
     total: values.length,
     missing,
