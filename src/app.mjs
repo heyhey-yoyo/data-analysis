@@ -926,14 +926,20 @@ function analyzeMultiGroup() {
   };
   const firstEstimate = postHoc.length ? postHoc[0].estimateType : 'mean-difference';
   const estimateHeader = estimateLabels[firstEstimate] || '效应量';
-  // MW 标注精确/渐近 P
-  const mwPType = method === 'mann-whitney' && postHoc.length ? postHoc[0].pValueType : null;
-  const methodDisplay = (methodLabels[method] || method) + (mwPType === 'exact' ? '（精确 P）' : mwPType === 'asymptotic' ? '（渐近 P）' : '');
-  const postRows = postHoc.map((row) => [row.comparison, formatNumber(row.difference), formatNumber(row.statistic), formatNumber(row.df), pCell(row.pValue), pCell(row.adjustedP), row.correction === 'builtin' ? '学生化极差内置控制' : row.correction === 'none' ? '不校正' : row.correction]);
+  const isMW = method === 'mann-whitney';
+  // MW 有独立 P 类型列，不需要在表标题标注
+  const methodDisplay = methodLabels[method] || method;
+  const pTypeLabel = (t) => t === 'exact' ? '精确' : t === 'asymptotic' ? '渐近' : t || '';
+  const postHeaders = isMW
+    ? ['比较', estimateHeader, 'U', '原始 P', '校正 P', 'P 类型', '校正']
+    : ['比较', estimateHeader, '统计量', 'df', '原始 P', '校正 P', '校正'];
+  const postRows = isMW
+    ? postHoc.map((row) => [row.comparison, formatNumber(row.difference), formatNumber(row.statistic), pCell(row.pValue), pCell(row.adjustedP), pTypeLabel(row.pValueType), row.correction === 'none' ? '不校正' : row.correction])
+    : postHoc.map((row) => [row.comparison, formatNumber(row.difference), formatNumber(row.statistic), formatNumber(row.df), pCell(row.pValue), pCell(row.adjustedP), row.correction === 'builtin' ? '学生化极差内置控制' : row.correction === 'none' ? '不校正' : row.correction]);
   if (method === 'fisher-lsd' && !postRows.length) {
     setSecondary('Fisher LSD 事后比较', 'protected Fisher LSD 依赖前置的总体 ANOVA 检验。', ['状态'], [['总体 ANOVA 未达到显著水平，因此未执行 protected Fisher LSD。']]);
   } else {
-    setSecondary(`${methodDisplay} 事后比较`, 'Tukey 与 Games–Howell 使用学生化极差分布；protected Fisher LSD 仅在总体 ANOVA 显著后执行，两两 P 不单独校正；其他方法使用所选校正。', ['比较', estimateHeader, '统计量', 'df', '原始 P', '校正 P', '校正'], postRows);
+    setSecondary(`${methodDisplay} 事后比较`, 'Tukey 与 Games–Howell 使用学生化极差分布；protected Fisher LSD 仅在总体 ANOVA 显著后执行，两两 P 不单独校正；其他方法使用所选校正。', postHeaders, postRows);
   }
 
   if (!welch) {
@@ -1014,19 +1020,26 @@ function parseGroupedText(text) {
     const decSep = state.decimalSeparator;
     let tokens;
     if (decSep === 'comma') {
-      // 逗号是小数点，数值只用空格或分号分隔
       tokens = body.split(/[;；\s]+/).filter(Boolean);
     } else if (decSep === 'dot') {
-      // 逗号是千分位或分隔符，按逗号/中文逗号/空格切分
-      tokens = body.split(/[;；，\s]+|,(?=\s*[-+]?\d)/).filter(Boolean);
-    } else {
-      // auto 模式：优先按空格/分号切分，保留 token 内单个逗号供 parseNumeric 识别
       tokens = body.split(/[;；\s]+/).filter(Boolean);
-      const parsedCount = tokens.map((t) => parseNumeric(t, numberOptions())).filter((p) => p.kind === 'number').length;
-      // 如果大部分 token 未能解析，尝试按逗号分隔（可能是逗号分隔的整数）
-      if (parsedCount === 0 && /,/.test(body)) {
-        const altTokens = body.split(/[;；，\s]+|,(?=\s*[-+]?\d)/).filter(Boolean);
-        if (altTokens.length > tokens.length) tokens = altTokens;
+    } else {
+      // auto: two candidates, pick best, warn on ambiguity
+      const tokensA = body.split(/[;；\s]+/).filter(Boolean);
+      const tokensB = body.split(/[;；，\s]+|,(?=\s*[-+]?\d)/).filter(Boolean);
+      const parsedA = tokensA.map((t) => parseNumeric(t, numOpts));
+      const parsedB = tokensB.map((t) => parseNumeric(t, numOpts));
+      const okA = parsedA.every((p) => p.kind === 'number');
+      const okB = parsedB.every((p) => p.kind === 'number');
+      if (!okA && !okB) {
+        tokens = tokensA;
+      } else if (okA && okB && tokensA.length !== tokensB.length) {
+        errors.push({ message: `"${label}" 中逗号含义存在歧义（小数点或分隔符），请明确选择小数格式。当前按空格分隔解析。` });
+        tokens = tokensA;
+      } else if (okA) {
+        tokens = tokensA;
+      } else {
+        tokens = tokensB;
       }
     }
     let invalidCount = 0;
