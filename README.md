@@ -54,14 +54,14 @@ src/
 _headers        # Cloudflare Pages 推荐
 ```
 
-### Cloudflare Pages
+**Cloudflare Pages**
 
 1. 将仓库内容上传或提交到 Git。
 2. Framework preset 选择 `None`。
 3. Build command 留空。
 4. Build output directory 使用 `/`（仓库根目录）。
 
-### GitHub Pages / 任意静态服务器
+**GitHub Pages / 任意静态服务器**
 
 直接发布目录根部即可。所有资源使用相对路径，支持子路径部署。
 
