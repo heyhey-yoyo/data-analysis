@@ -6,6 +6,19 @@ export function clampProbability(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+// Kahan 补偿求和，用于数值稳定性
+function compensatedSum(values) {
+  let sum = 0;
+  let compensation = 0;
+  for (let i = 0; i < values.length; i++) {
+    const y = values[i] - compensation;
+    const t = sum + y;
+    compensation = (t - sum) - y;
+    sum = t;
+  }
+  return sum;
+}
+
 export function parseNumeric(rawValue, options = {}) {
   const {
     decimalSeparator = 'auto',
@@ -311,10 +324,16 @@ export function stats(values) {
   const clean = values.filter(Number.isFinite).slice().sort((a, b) => a - b);
   if (!clean.length) return null;
   const count = clean.length;
-  const sum = clean.reduce((total, value) => total + value, 0);
-  const mean = sum / count;
-  const ss = clean.reduce((total, value) => total + (value - mean) ** 2, 0);
-  const variance = count > 1 ? ss / (count - 1) : 0;
+  // Welford 单次遍历：同时计算均值与 M2，数值更稳定
+  let mean = 0;
+  let m2 = 0;
+  for (let i = 0; i < count; i++) {
+    const delta = clean[i] - mean;
+    mean += delta / (i + 1);
+    m2 += delta * (clean[i] - mean);
+  }
+  const variance = count > 1 ? m2 / (count - 1) : 0;
+  const sum = compensatedSum(clean);
   return {
     count,
     sum,
@@ -506,8 +525,9 @@ export function pearsonCorrelation(valuesA, valuesB) {
   }
   const n = pairs.length;
   if (n < 3) return null;
-  const meanA = pairs.reduce((sum, pair) => sum + pair[0], 0) / n;
-  const meanB = pairs.reduce((sum, pair) => sum + pair[1], 0) / n;
+  // 使用补偿求和计算均值，避免灾难性消减
+  const meanA = compensatedSum(pairs.map((p) => p[0])) / n;
+  const meanB = compensatedSum(pairs.map((p) => p[1])) / n;
   let cross = 0;
   let ssA = 0;
   let ssB = 0;
@@ -516,7 +536,7 @@ export function pearsonCorrelation(valuesA, valuesB) {
     ssA += (a - meanA) ** 2;
     ssB += (b - meanB) ** 2;
   });
-  if (!(ssA > 0) || !(ssB > 0)) return { coefficient: 0, pValue: 1, n };
+  if (!(ssA > 0) || !(ssB > 0)) return { coefficient: null, pValue: null, n, status: 'constant-input' };
   const coefficient = clampProbability((cross / Math.sqrt(ssA * ssB) + 1) / 2) * 2 - 1;
   const statistic = Math.abs(coefficient) >= 1 ? Infinity : coefficient * Math.sqrt((n - 2) / (1 - coefficient ** 2));
   return { coefficient, pValue: statistic === Infinity ? 0 : tTwoSidedP(statistic, n - 2), n };
@@ -540,7 +560,8 @@ export function distributionMoments(values) {
   const clean = values.filter(Number.isFinite);
   const n = clean.length;
   if (!n) return { n: 0, skewness: null, kurtosis: null, excessKurtosis: null, variance: null };
-  const mean = clean.reduce((sum, value) => sum + value, 0) / n;
+  // 使用补偿求和计算均值，避免灾难性消减
+  const mean = compensatedSum(clean) / n;
   let m2 = 0;
   let m3 = 0;
   let m4 = 0;
@@ -572,7 +593,7 @@ function normalityResultBase(values, key, name, minimumN) {
 }
 
 export function shapiroFamily(values) {
-  const base = normalityResultBase(values, 'shapiro', 'Shapiro 系列', 3);
+  const base = normalityResultBase(values, 'shapiro', 'Shapiro–Francia W′', 3);
   if (!base.clean) return base;
   const clean = base.clean.slice().sort((a, b) => a - b);
   const n = clean.length;
@@ -667,14 +688,14 @@ export function chooseAutomaticNormalityMethod(values) {
   const uniqueCount = new Set(clean).size;
   const tieRate = n ? 1 - uniqueCount / n : 1;
   if (n < 3) return { key: 'shapiro', reason: '有效样本量不足 3，无法可靠执行正态性检验。' };
-  if (n === 3) return { key: 'shapiro', reason: 'n = 3，采用 Shapiro–Wilk 的精确小样本形式。' };
+  if (n === 3) return { key: 'shapiro', reason: 'n = 3，采用正态性检验的精确小样本形式。' };
   if (n === 4) return { key: 'anderson', reason: 'n = 4，采用 Anderson–Darling，并保守解释 P 值。' };
   if (tieRate >= 0.2) {
     return n >= 20
       ? { key: 'dagostino', reason: '重复值或取整值较多，改用基于偏度与峰度的 D’Agostino–Pearson K²。' }
       : { key: 'anderson', reason: '重复值或取整值较多且样本较小，采用 Anderson–Darling，并提示谨慎解释。' };
   }
-  if (n <= 49) return { key: 'shapiro', reason: '小样本采用 Shapiro 系列，通常对整体偏离较敏感。' };
+  if (n <= 49) return { key: 'shapiro', reason: '小样本采用 Shapiro–Francia W′，通常对整体偏离较敏感。' };
   if (n <= 299) return { key: 'anderson', reason: '中等样本采用 Anderson–Darling，兼顾中心与尾部偏离。' };
   if (n <= 1999) return { key: 'dagostino', reason: '较大样本采用 D’Agostino–Pearson K²，综合检查偏度与峰度。' };
   return { key: 'jarque', reason: '超大样本采用计算较快的 Jarque–Bera；此时任何检验都可能对微小偏离非常敏感。' };
@@ -1098,6 +1119,7 @@ export function fixedMarginExact(counts, options = {}) {
   const columnTotals = summary.columnTotals;
   const rowCount = rowTotals.length;
   const columnCount = columnTotals.length;
+  const isTwoByTwo = rowCount === 2 && columnCount === 2;
   const table = Array.from({ length: rowCount }, () => Array(columnCount).fill(0));
   const remainingColumns = columnTotals.slice();
   const logConstant = rowTotals.reduce((sum, value) => sum + logGamma(value + 1), 0)
@@ -1105,11 +1127,25 @@ export function fixedMarginExact(counts, options = {}) {
     - logGamma(summary.total + 1);
   const observed = summary.statistic;
   const tolerance = Math.max(1, observed) * 1e-12;
+  // 预计算 logGamma 缓存：消除枚举过程中的 logGamma 调用
+  const maxCellValue = Math.max(...rowTotals, ...columnTotals);
+  const logGammaCache = new Array(maxCellValue + 1);
+  for (let v = 0; v <= maxCellValue; v++) logGammaCache[v] = logGamma(v + 1);
   const startedAt = Date.now();
   let tableCount = 0;
   let totalProbability = 0;
   let extremeProbability = 0;
   let stopped = null;
+
+  // 2×2 标准双侧 Fisher：按表概率排序（非 χ² 判据）
+  let observedProbability = 0;
+  if (isTwoByTwo) {
+    let logDenom = 0;
+    for (let r = 0; r < rowCount; r++) {
+      for (let c = 0; c < columnCount; c++) logDenom += logGammaCache[counts[r][c]];
+    }
+    observedProbability = Math.exp(logConstant - logDenom);
+  }
 
   const evaluate = () => {
     tableCount += 1;
@@ -1117,12 +1153,18 @@ export function fixedMarginExact(counts, options = {}) {
     if ((tableCount & 1023) === 0 && Date.now() - startedAt > timeLimitMilliseconds) { stopped = 'timeout'; return; }
     let logDenominator = 0;
     for (let r = 0; r < rowCount; r += 1) {
-      for (let c = 0; c < columnCount; c += 1) logDenominator += logGamma(table[r][c] + 1);
+      for (let c = 0; c < columnCount; c += 1) logDenominator += logGammaCache[table[r][c]];
     }
     const probability = Math.exp(logConstant - logDenominator);
-    const statistic = contingencyStatistics(table).statistic;
     totalProbability += probability;
-    if (statistic + tolerance >= observed) extremeProbability += probability;
+    if (isTwoByTwo) {
+      // 标准双侧 Fisher：概率不大于观测表概率
+      if (probability <= observedProbability + 1e-12) extremeProbability += probability;
+    } else {
+      // r×c：基于 Pearson χ² 极端性排序
+      const statistic = contingencyStatistics(table).statistic;
+      if (statistic + tolerance >= observed) extremeProbability += probability;
+    }
   };
 
   function fillRow(rowIndex) {
@@ -1162,7 +1204,8 @@ export function fixedMarginExact(counts, options = {}) {
   fillRow(0);
   if (stopped) return { status: stopped, pValue: null, tableCount, observedStatistic: observed };
   if (!(totalProbability > 0)) return { status: 'enumeration-failed', pValue: null, tableCount, observedStatistic: observed };
-  return { status: 'exact', pValue: clampProbability(extremeProbability / totalProbability), tableCount, observedStatistic: observed };
+  const pValue = clampProbability(extremeProbability / totalProbability);
+  return { status: 'exact', pValue, tableCount, observedStatistic: observed, method: isTwoByTwo ? 'fisher' : 'pearson-chi-squared-exact' };
 }
 
 export function safeCsvCell(value) {

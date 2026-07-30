@@ -17,8 +17,6 @@ import {
   kruskalWallis,
   postHocComparisons,
   contingencyStatistics,
-  exactTwoSamplePermutation,
-  fixedMarginExact,
   toCsv,
 } from './core.mjs';
 
@@ -76,37 +74,41 @@ let analysisVersion = 0;
 let storageWarning = '';
 let latestResult = { headers: [], rows: [] };
 
-const pendingWorkerTasks = new Map();
-let workerTaskId = 0;
-let analysisWorker = null;
-try {
-  analysisWorker = new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });
-  analysisWorker.addEventListener('message', (event) => {
-    const pending = pendingWorkerTasks.get(event.data?.id);
-    if (!pending) return;
-    pendingWorkerTasks.delete(event.data.id);
-    if (event.data.ok) pending.resolve(event.data.result);
-    else pending.reject(new Error(event.data.error || 'Worker 计算失败'));
-  });
-  analysisWorker.addEventListener('error', () => {
-    analysisWorker = null;
-    pendingWorkerTasks.forEach(({ reject }) => reject(new Error('Worker 不可用')));
-    pendingWorkerTasks.clear();
-  });
-} catch {
-  analysisWorker = null;
-}
+let currentWorker = null;
+let currentWorkerTaskId = 0;
 
 function runHeavyTask(task, payload) {
-  if (!analysisWorker) {
-    if (task === 'two-sample-permutation') return Promise.resolve(exactTwoSamplePermutation(payload.valuesA, payload.valuesB, payload.options));
-    if (task === 'fixed-margin-exact') return Promise.resolve(fixedMarginExact(payload.counts, payload.options));
-    return Promise.reject(new Error('未知计算任务'));
+  // 终止旧 Worker（取消进行中的任务）
+  if (currentWorker) {
+    currentWorker.terminate();
+    currentWorker = null;
   }
-  const id = ++workerTaskId;
+
   return new Promise((resolve, reject) => {
-    pendingWorkerTasks.set(id, { resolve, reject });
-    analysisWorker.postMessage({ id, task, payload });
+    try {
+      const worker = new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });
+      currentWorker = worker;
+      const id = ++currentWorkerTaskId;
+
+      worker.addEventListener('message', (event) => {
+        if (event.data?.id !== id) return;
+        worker.terminate();
+        if (currentWorker === worker) currentWorker = null;
+        if (event.data.ok) resolve(event.data.result);
+        else reject(new Error(event.data.error || 'Worker 计算失败'));
+      });
+
+      worker.addEventListener('error', () => {
+        worker.terminate();
+        if (currentWorker === worker) currentWorker = null;
+        reject(new Error('Worker 不可用'));
+      });
+
+      worker.postMessage({ id, task, payload });
+    } catch (e) {
+      currentWorker = null;
+      reject(new Error('Worker 创建失败'));
+    }
   });
 }
 
@@ -686,11 +688,23 @@ function analyzeCorrelation(currentProfiles) {
       const b = numericSeries(numericHeaders[j]);
       if (state.correlationMethod !== 'spearman') {
         const result = pearsonCorrelation(a, b);
-        if (result) rows.push([numericHeaders[i], numericHeaders[j], 'Pearson', formatNumber(result.coefficient), pCell(result.pValue), result.n]);
+        if (result) {
+          if (result.status === 'constant-input') {
+            rows.push([numericHeaders[i], numericHeaders[j], 'Pearson', '—（常量输入）', '—', result.n]);
+          } else {
+            rows.push([numericHeaders[i], numericHeaders[j], 'Pearson', formatNumber(result.coefficient), pCell(result.pValue), result.n]);
+          }
+        }
       }
       if (state.correlationMethod !== 'pearson') {
         const result = spearmanCorrelation(a, b);
-        if (result) rows.push([numericHeaders[i], numericHeaders[j], 'Spearman', formatNumber(result.coefficient), pCell(result.pValue), result.n]);
+        if (result) {
+          if (result.status === 'constant-input') {
+            rows.push([numericHeaders[i], numericHeaders[j], 'Spearman', '—（常量输入）', '—', result.n]);
+          } else {
+            rows.push([numericHeaders[i], numericHeaders[j], 'Spearman', formatNumber(result.coefficient), pCell(result.pValue), result.n]);
+          }
+        }
       }
     }
   }
@@ -740,9 +754,10 @@ async function analyzeCategorical(currentProfiles, version) {
     if (exact.status === 'invalid') return '不适用';
     return exact.status;
   })();
+  const exactMethodLabel = exact.method === 'fisher' ? 'Fisher 精确 P' : '固定边际精确 Pearson χ² 检验';
   setMainResult('分类变量关联检验', 'Pearson χ² 为渐近检验；期望频数较小时优先参考成功完成的固定边际精确结果。', ['方法', '统计量', 'df', 'P', '效应 / 状态'], [
     ['Pearson χ²', formatNumber(summary.statistic), summary.df, pCell(summary.pValue), `Cramér V = ${formatNumber(summary.cramerV)}`],
-    ['固定边际精确 P', formatNumber(summary.statistic), '固定边际', exact.status === 'exact' ? pCell(exact.pValue) : '—', statusText],
+    [exactMethodLabel, formatNumber(summary.statistic), '固定边际', exact.status === 'exact' ? pCell(exact.pValue) : '—', statusText],
   ]);
   if (summary.lowExpected > 0) setRecommendation('存在期望频数低于 5 的单元格；若精确枚举成功，优先参考精确 P，并结合效应量与研究设计。');
 }
@@ -775,8 +790,8 @@ async function analyzeTwoGroup(currentProfiles, version) {
     { value: built.excludedInvalid, label: '排除非法格式' },
   ]);
   const rows = [
+    ['Welch t（推荐）', formatNumber(welch.statistic), formatNumber(welch.df), pCell(welch.pValue), '—', '不要求方差相等'],
     ['等方差 t', formatNumber(pooled.statistic), formatNumber(pooled.df), pCell(pooled.pValue), `Cohen d = ${formatNumber(pooled.effect)}`, '参数法'],
-    ['Welch t', formatNumber(welch.statistic), formatNumber(welch.df), pCell(welch.pValue), '—', '不要求方差相等'],
     ['Mann–Whitney U', `${formatNumber(mw.statistic)}（Z=${formatNumber(mw.z)}）`, '—', pCell(mw.pValue), `秩二列相关 = ${formatNumber(mw.effect)}`, 'U=均值时连续性校正为 0'],
     ['均值差标签置换', '—', '—', '计算中…', '—', '交换性假设下精确'],
   ];
@@ -802,10 +817,7 @@ async function analyzeTwoGroup(currentProfiles, version) {
   rows[3] = ['均值差标签置换', formatNumber(exact.observedDifference), '固定组大小', exact.status === 'exact' ? pCell(exact.pValue) : '—', '均值差', statusText];
   setMainResult('两独立样本检验', '多种结果并列展示；方法选择应结合分布、方差、测量尺度和研究设计。', ['方法', '统计量', 'df', 'P', '效应量', '说明'], rows);
 
-  if (normality.allPass && variance?.pValue >= ALPHA) setRecommendation('自动建议：正态性诊断未提示明显偏离且方差诊断通过，可优先参考等方差 t；同时报告效应量与置信区间会更完整。');
-  else if (normality.allPass) setRecommendation('自动建议：正态性诊断未提示明显偏离，但方差可能不齐，优先参考 Welch t。');
-  else if (normality.anyFail) setRecommendation('自动建议：至少一组的正态性诊断提示偏离，可优先参考 Mann–Whitney。均值差标签置换仅在两组分布相同的原假设下精确；仅均值相等但方差或分布形状不同时，不保证精确控制错误率。');
-  else setRecommendation('样本量不足以完成全部正态性诊断；建议结合图形、异常值和研究背景，通常优先参考更稳健的 Welch t，并与秩检验对照。');
+  setRecommendation('自动建议：Welch t 不要求方差相等，在大多数情况下比等方差 t 更稳健，推荐优先参考。正态性与方差诊断结果仅供参考，不会因此自动切换方法。如需非参数检验请手动选择 Mann–Whitney。');
 }
 
 function analyzeMultiGroup() {
@@ -828,8 +840,8 @@ function analyzeMultiGroup() {
     { value: built.excludedInvalid, label: '排除非法格式' },
   ]);
   const omnibusRows = [
+    ['Welch ANOVA（推荐）', formatNumber(welch?.statistic), `${formatNumber(welch?.df1)}, ${formatNumber(welch?.df2)}`, pCell(welch?.pValue), '方差不齐稳健'],
     ['经典单因素 ANOVA', formatNumber(anova?.statistic), `${formatNumber(anova?.df1)}, ${formatNumber(anova?.df2)}`, pCell(anova?.pValue), `η² = ${formatNumber(anova?.etaSquared)}`],
-    ['Welch ANOVA', formatNumber(welch?.statistic), `${formatNumber(welch?.df1)}, ${formatNumber(welch?.df2)}`, pCell(welch?.pValue), '方差不齐稳健'],
     ['Kruskal–Wallis', formatNumber(kw?.statistic), formatNumber(kw?.df), pCell(kw?.pValue), `ε² = ${formatNumber(kw?.epsilonSquared)}`],
     [`${variance?.name || '方差齐性'} 诊断`, formatNumber(variance?.statistic), variance ? (variance.df2 == null ? formatNumber(variance.df1) : `${formatNumber(variance.df1)}, ${formatNumber(variance.df2)}`) : '—', pCell(variance?.pValue), 'P < 0.05 提示方差不齐'],
     ...built.labels.map((label, index) => {
@@ -842,8 +854,7 @@ function analyzeMultiGroup() {
   let method = state.postHocMethod;
   if (method === 'auto') {
     if (normality.allPass && variance?.pValue >= ALPHA) method = 'tukey';
-    else if (normality.allPass) method = 'games-howell';
-    else method = 'dunn';
+    else method = 'games-howell';
   }
   const postHoc = postHocComparisons(built.labels, built.groups, method, state.correctionMethod);
   const methodLabels = {
@@ -856,10 +867,7 @@ function analyzeMultiGroup() {
     setSecondary(`${methodLabels[method] || method} 事后比较`, 'Tukey 与 Games–Howell 使用学生化极差分布；protected Fisher LSD 仅在总体 ANOVA 显著后执行，两两 P 不单独校正；其他方法使用所选校正。', ['比较', '差值', '统计量', 'df', '原始 P', '校正 P', '校正'], postRows);
   }
 
-  if (normality.allPass && variance?.pValue >= ALPHA) setRecommendation(`自动建议：优先参考经典 ANOVA，并使用 ${methodLabels[method]}。`);
-  else if (normality.allPass) setRecommendation(`自动建议：方差可能不齐，优先参考 Welch ANOVA，并使用 ${methodLabels[method]}。`);
-  else if (normality.anyFail) setRecommendation(`自动建议：分布诊断提示偏离，优先参考 Kruskal–Wallis，并使用 ${methodLabels[method]}。`);
-  else setRecommendation(`部分组 n < 8，正态性判断有限；建议对照 Welch ANOVA 与 Kruskal–Wallis，当前事后方法为 ${methodLabels[method]}。`);
+  setRecommendation(`自动建议：Welch ANOVA 不要求方差相等，推荐优先参考，并使用 ${methodLabels[method]} 做事后比较。正态性与方差诊断仅供参考，不会因此自动切换方法。如需非参数检验请手动选择。`);
 }
 
 async function decodeFile(file, encoding) {

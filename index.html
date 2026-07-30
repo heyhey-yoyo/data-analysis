@@ -68,7 +68,7 @@
           <span>正态性检验</span>
           <select id="normalityMethod">
             <option value="auto">自动推荐（按样本量与数据特征）</option>
-            <option value="shapiro">Shapiro 系列（小样本）</option>
+            <option value="shapiro">Shapiro–Francia（小样本）</option>
             <option value="anderson">Anderson–Darling</option>
             <option value="dagostino">D’Agostino–Pearson K²</option>
             <option value="jarque">Jarque–Bera</option>
@@ -274,7 +274,7 @@
         <li><strong>多独立组：</strong>同时计算经典单因素 ANOVA、Welch ANOVA 和 Kruskal–Wallis。事后方法可选 Tukey–Kramer、Games–Howell、protected Fisher LSD（仅总体 ANOVA 显著后执行，两两 P 不单独校正）、两两 t、Dunn 和两两 Mann–Whitney，并可选 Holm、Bonferroni、Šidák 或 BH-FDR 校正。</li>
         <li><strong>相关性：</strong>Pearson 是参数化线性相关；Spearman 是基于秩的非参数相关。自动模式会根据当前选择的正态性诊断推荐矩阵，但两种结果均可切换查看。</li>
         <li><strong>分类变量：</strong>同时提供 Pearson χ² 渐近 P 与固定边际精确置换 P。期望频数较小时优先参考精确结果。</li>
-        <li><strong>自动筛查：</strong>正态性自动模式会按样本量、重复值比例等选择 Shapiro 系列、Anderson–Darling、D’Agostino–Pearson 或 Jarque–Bera；方差齐性自动模式在分布较合理时可选 Bartlett，否则优先 Brown–Forsythe。用户可手动改用其他方法。</li>
+        <li><strong>自动筛查：</strong>正态性自动模式会按样本量、重复值比例等选择 Shapiro–Francia W′、Anderson–Darling、D’Agostino–Pearson 或 Jarque–Bera；方差齐性自动模式在分布较合理时可选 Bartlett，否则优先 Brown–Forsythe。用户可手动改用其他方法。</li>
         <li><strong>表格编辑：</strong>可直接修改字段名与单元格，支持在任意单元格粘贴 Excel/WPS 的多行多列区域；分析会在编辑后自动刷新。</li>
         <li>自动推荐不会替代研究设计判断。重复测量、配对数据、聚类样本、协变量调整和多重比较需要使用相应的专门模型。</li>
       </ul>

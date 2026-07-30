@@ -5,10 +5,10 @@
 ## 主要分析方法
 
 **描述统计**
-均值、标准差、中位数、四分位数、峰度、偏度、标准误差与置信区间。
+均值、标准差、中位数、四分位数、峰度、偏度、标准误差。
 
 **正态性检验**
-- Shapiro–Wilk
+- Shapiro–Francia W′
 - Anderson–Darling
 - D'Agostino–Pearson
 - Jarque–Bera
@@ -20,14 +20,11 @@
 
 **参数检验**
 - 独立样本 t 检验（含 Welch 校正）
-- 配对 t 检验
 - 单因素方差分析（ANOVA）
 
 **非参数检验**
 - Mann–Whitney U 检验
-- Wilcoxon 符号秩检验
 - Kruskal–Wallis 检验
-- Friedman 检验
 
 **事后多重比较**
 - Tukey–Kramer（等方差）
@@ -35,11 +32,11 @@
 - Fisher LSD（受保护）
 - Dunn 检验（非参数）
 - 两两 Mann–Whitney
-- 多重校正：Bonferroni、Holm、Benjamini–Hochberg（FDR）
+- 多重校正：Bonferroni、Holm、Šidák、Benjamini–Hochberg（FDR）
 
 **其他分析方法**
-- 相关分析（Pearson / Spearman / Kendall），逐对报告有效样本量 N
-- 精确置换检验（枚举 / 蒙特卡洛采样）
+- 相关分析（Pearson / Spearman），逐对报告有效样本量 N
+- 精确置换检验（精确枚举）
 - Fisher 精确检验与卡方检验
 - CSV/TSV 导入（自动检测分隔符，支持 UTF-8、GB18030/GBK、Big5 编码）
 

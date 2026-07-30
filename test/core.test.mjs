@@ -9,6 +9,11 @@ import {
   mannWhitney,
   postHocComparisons,
   tTwoSidedP,
+  fixedMarginExact,
+  pearsonCorrelation,
+  spearmanCorrelation,
+  shapiroFamily,
+  stats,
 } from '../src/core.mjs';
 
 let passed = 0;
@@ -106,6 +111,62 @@ test('P1-4 保护逻辑不影响其他事后方法', () => {
     const rows = postHocComparisons(labels, flatGroups, method);
     assert.equal(rows.length, 3, `${method} 在相同数据上应有 3 组比较`);
   }
+});
+
+// ---------- B1-1：Fisher 2×2 精确检验 ----------
+
+test('B1-1 Fisher 2×2 [[8,2],[1,1]] 双侧精确 P ≈ 0.4545', () => {
+  const result = fixedMarginExact([[8, 2], [1, 1]]);
+  assert.equal(result.status, 'exact');
+  assert.ok(Math.abs(result.pValue - 0.4545) < 0.001, `P = ${result.pValue}`);
+});
+
+// ---------- B1-2：常量列相关分析 ----------
+
+test('B1-2 Pearson 常量列返回 coefficient:null, pValue:null, status:constant-input', () => {
+  const result = pearsonCorrelation([1, 1, 1, 1], [1, 2, 3, 4]);
+  assert.equal(result.coefficient, null);
+  assert.equal(result.pValue, null);
+  assert.equal(result.n, 4);
+  assert.equal(result.status, 'constant-input');
+});
+
+test('B1-2 Spearman 常量列返回 constant-input 状态', () => {
+  const result = spearmanCorrelation([1, 2, 3, 4], [5, 5, 5, 5]);
+  assert.equal(result.coefficient, null);
+  assert.equal(result.pValue, null);
+  assert.equal(result.n, 4);
+  assert.equal(result.status, 'constant-input');
+});
+
+// ---------- B1-3：Shapiro–Francia 命名 ----------
+
+test('B1-3 shapiroFamily n≥4 返回 "Shapiro–Francia"', () => {
+  const result = shapiroFamily([1, 2, 3, 4, 5]);
+  assert.ok(result.name.includes('Shapiro–Francia'), `实际名称：${result.name}`);
+});
+
+// ---------- B2-2：数值稳定性 ----------
+
+test('B2-2 方差平移不变性', () => {
+  // 大数据加小扰动，方差应接近理论值 2.5
+  const base = [1e6, 1e6 + 1, 1e6 + 2, 1e6 + 3, 1e6 + 4];
+  const result = stats(base);
+  assert.ok(Math.abs(result.variance - 2.5) < 0.001, `方差 = ${result.variance}，期望 ≈ 2.5`);
+});
+
+test('B2-2 近常量输入不崩溃', () => {
+  const nearConst = [1 + 1e-10, 1 + 2e-10, 1 + 3e-10, 1 + 4e-10, 1 + 5e-10];
+  const result = stats(nearConst);
+  assert.ok(result.variance > 0, `方差应为正，得到 ${result.variance}`);
+  assert.ok(Number.isFinite(result.sd), 'SD 应为有限值');
+});
+
+test('B2-2 高动态范围均值不溢出', () => {
+  const data = [1e-15, 1, 1e15];
+  const result = stats(data);
+  assert.ok(Number.isFinite(result.mean), `均值应有限，得到 ${result.mean}`);
+  assert.ok(result.mean > 0, `均值应为正，得到 ${result.mean}`);
 });
 
 // ---------- 汇总 ----------
