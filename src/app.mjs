@@ -75,38 +75,46 @@ let storageWarning = '';
 let latestResult = { headers: [], rows: [] };
 
 let currentWorker = null;
+let currentWorkerReject = null;
 let currentWorkerTaskId = 0;
 
 function runHeavyTask(task, payload) {
-  // 终止旧 Worker（取消进行中的任务）
+  // 终止旧 Worker，对其 Promise reject AbortError
   if (currentWorker) {
+    const oldReject = currentWorkerReject;
     currentWorker.terminate();
     currentWorker = null;
+    currentWorkerReject = null;
+    if (oldReject) {
+      const err = new DOMException('已取消', 'AbortError');
+      oldReject(err);
+    }
   }
 
   return new Promise((resolve, reject) => {
     try {
       const worker = new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });
       currentWorker = worker;
+      currentWorkerReject = reject;
       const id = ++currentWorkerTaskId;
 
       worker.addEventListener('message', (event) => {
         if (event.data?.id !== id) return;
         worker.terminate();
-        if (currentWorker === worker) currentWorker = null;
+        if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
         if (event.data.ok) resolve(event.data.result);
         else reject(new Error(event.data.error || 'Worker 计算失败'));
       });
 
       worker.addEventListener('error', () => {
         worker.terminate();
-        if (currentWorker === worker) currentWorker = null;
+        if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
         reject(new Error('Worker 不可用'));
       });
 
       worker.postMessage({ id, task, payload });
     } catch (e) {
-      currentWorker = null;
+      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
       reject(new Error('Worker 创建失败'));
     }
   });
@@ -744,7 +752,13 @@ async function analyzeCategorical(currentProfiles, version) {
   const contingencyRows = built.rowLabels.map((label, rowIndex) => [label, ...built.counts[rowIndex], summary.rowTotals[rowIndex]]);
   contingencyRows.push(['合计', ...summary.columnTotals, summary.total]);
   setSecondary('列联表', `排除任一字段空白的记录 ${built.excluded} 行。`, [state.categoryColumnA, ...built.columnLabels, '合计'], contingencyRows);
-  const exact = await runHeavyTask('fixed-margin-exact', { counts: built.counts, options: { maximumTables: 100000, timeLimitMilliseconds: 1800 } });
+  let exact;
+  try {
+    exact = await runHeavyTask('fixed-margin-exact', { counts: built.counts, options: { maximumTables: 100000, timeLimitMilliseconds: 1800 } });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return; // 静默忽略取消
+    throw e;
+  }
   if (version !== analysisVersion) return;
   const statusText = (() => {
     if (exact.status === 'exact') return `枚举 ${exact.tableCount.toLocaleString()} 个表`;
@@ -804,7 +818,13 @@ async function analyzeTwoGroup(currentProfiles, version) {
   descriptiveRows.push(['方差齐性', '—', '—', '—', '—', variance?.name || '无法计算', variance ? formatP(variance.pValue) : '—']);
   setSecondary('组别描述与诊断', '自动模式会按样本量与重复值比例选择正态性检验；方差诊断可自动选择 Bartlett 或 Brown–Forsythe。', ['组别', 'N', '均值', 'SD', '中位数', '诊断方法', '诊断 P'], descriptiveRows);
 
-  const exact = await runHeavyTask('two-sample-permutation', { valuesA: built.groups[0], valuesB: built.groups[1], options: { maximumPermutations: 100000, timeLimitMilliseconds: 1800 } });
+  let exact;
+  try {
+    exact = await runHeavyTask('two-sample-permutation', { valuesA: built.groups[0], valuesB: built.groups[1], options: { maximumPermutations: 100000, timeLimitMilliseconds: 1800 } });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return; // 静默忽略取消
+    throw e;
+  }
   if (version !== analysisVersion) return;
   const statusText = (() => {
     if (exact.status === 'exact') return `${exact.extremeCount}/${exact.totalCount} 个排列同样或更极端`;
@@ -853,8 +873,7 @@ function analyzeMultiGroup() {
 
   let method = state.postHocMethod;
   if (method === 'auto') {
-    if (normality.allPass && variance?.pValue >= ALPHA) method = 'tukey';
-    else method = 'games-howell';
+    method = 'games-howell';
   }
   const postHoc = postHocComparisons(built.labels, built.groups, method, state.correctionMethod);
   const methodLabels = {
@@ -867,7 +886,7 @@ function analyzeMultiGroup() {
     setSecondary(`${methodLabels[method] || method} 事后比较`, 'Tukey 与 Games–Howell 使用学生化极差分布；protected Fisher LSD 仅在总体 ANOVA 显著后执行，两两 P 不单独校正；其他方法使用所选校正。', ['比较', '差值', '统计量', 'df', '原始 P', '校正 P', '校正'], postRows);
   }
 
-  setRecommendation(`自动建议：Welch ANOVA 不要求方差相等，推荐优先参考，并使用 ${methodLabels[method]} 做事后比较。正态性与方差诊断仅供参考，不会因此自动切换方法。如需非参数检验请手动选择。`);
+  setRecommendation(`自动建议：Welch ANOVA 不要求方差相等，推荐优先参考。事后比较默认使用 Games–Howell（异方差稳健），当前方法为 ${methodLabels[method]}。正态性与方差诊断仅为参考信息。如需非参数检验请手动选择。`);
 }
 
 async function decodeFile(file, encoding) {

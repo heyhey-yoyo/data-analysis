@@ -148,8 +148,14 @@ test('B1-3 shapiroFamily n≥4 返回 "Shapiro–Francia"', () => {
 
 // ---------- B2-2：数值稳定性 ----------
 
+test('B2-2 Neumaier 求和：stats([1e16, 1, -1e16]) 均值接近 1/3', () => {
+  // 朴素求和：1e16 + 1 + (-1e16) = 0（灾难性消减），Neumaier 应返回 ~1/3
+  const result = stats([1e16, 1, -1e16]);
+  assert.ok(Math.abs(result.mean - 1 / 3) < 1e-6, `均值 = ${result.mean}，期望 ≈ ${1 / 3}`);
+  assert.ok(Math.abs(result.sum - 1) < 1e-6, `和 = ${result.sum}，期望 ≈ 1`);
+});
+
 test('B2-2 方差平移不变性', () => {
-  // 大数据加小扰动，方差应接近理论值 2.5
   const base = [1e6, 1e6 + 1, 1e6 + 2, 1e6 + 3, 1e6 + 4];
   const result = stats(base);
   assert.ok(Math.abs(result.variance - 2.5) < 0.001, `方差 = ${result.variance}，期望 ≈ 2.5`);

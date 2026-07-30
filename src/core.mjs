@@ -6,17 +6,28 @@ export function clampProbability(value) {
   return Math.max(0, Math.min(1, value));
 }
 
-// Kahan 补偿求和，用于数值稳定性
-function compensatedSum(values) {
+// Neumaier 补偿求和：比 Kahan 对大值更稳定
+function neumaierSum(values) {
   let sum = 0;
   let compensation = 0;
   for (let i = 0; i < values.length; i++) {
-    const y = values[i] - compensation;
-    const t = sum + y;
-    compensation = (t - sum) - y;
+    const t = sum + values[i];
+    if (Math.abs(sum) >= Math.abs(values[i])) {
+      compensation += (sum - t) + values[i];
+    } else {
+      compensation += (values[i] - t) + sum;
+    }
     sum = t;
   }
-  return sum;
+  return sum + compensation;
+}
+
+// log-sum-exp：log(exp(a) + exp(b))，用于对数空间概率累加
+function logAddExp(logA, logB) {
+  if (logA === -Infinity || logA - logB <= -40) return logB;
+  if (logB === -Infinity || logB - logA <= -40) return logA;
+  const max = logA > logB ? logA : logB;
+  return max + Math.log1p(Math.exp(-Math.abs(logA - logB)));
 }
 
 export function parseNumeric(rawValue, options = {}) {
@@ -324,16 +335,15 @@ export function stats(values) {
   const clean = values.filter(Number.isFinite).slice().sort((a, b) => a - b);
   if (!clean.length) return null;
   const count = clean.length;
-  // Welford 单次遍历：同时计算均值与 M2，数值更稳定
-  let mean = 0;
+  // Neumaier 补偿求和算均值，两趟法算方差（均值精确后偏差更准确）
+  const sum = neumaierSum(clean);
+  const mean = sum / count;
   let m2 = 0;
   for (let i = 0; i < count; i++) {
-    const delta = clean[i] - mean;
-    mean += delta / (i + 1);
-    m2 += delta * (clean[i] - mean);
+    const dev = clean[i] - mean;
+    m2 += dev * dev;
   }
   const variance = count > 1 ? m2 / (count - 1) : 0;
-  const sum = compensatedSum(clean);
   return {
     count,
     sum,
@@ -526,8 +536,8 @@ export function pearsonCorrelation(valuesA, valuesB) {
   const n = pairs.length;
   if (n < 3) return null;
   // 使用补偿求和计算均值，避免灾难性消减
-  const meanA = compensatedSum(pairs.map((p) => p[0])) / n;
-  const meanB = compensatedSum(pairs.map((p) => p[1])) / n;
+  const meanA = neumaierSum(pairs.map((p) => p[0])) / n;
+  const meanB = neumaierSum(pairs.map((p) => p[1])) / n;
   let cross = 0;
   let ssA = 0;
   let ssB = 0;
@@ -561,7 +571,7 @@ export function distributionMoments(values) {
   const n = clean.length;
   if (!n) return { n: 0, skewness: null, kurtosis: null, excessKurtosis: null, variance: null };
   // 使用补偿求和计算均值，避免灾难性消减
-  const mean = compensatedSum(clean) / n;
+  const mean = neumaierSum(clean) / n;
   let m2 = 0;
   let m3 = 0;
   let m4 = 0;
@@ -722,7 +732,7 @@ export function oneWayAnova(groups) {
   const n = cleanGroups.reduce((sum, group) => sum + group.length, 0);
   if (k < 2 || n <= k) return null;
   const means = cleanGroups.map((group) => stats(group).mean);
-  const grandMean = cleanGroups.reduce((sum, group) => sum + group.reduce((a, b) => a + b, 0), 0) / n;
+  const grandMean = neumaierSum(cleanGroups.flat()) / n;
   let ssBetween = 0;
   let ssWithin = 0;
   cleanGroups.forEach((group, index) => {
@@ -1046,8 +1056,8 @@ export function exactTwoSamplePermutation(valuesA, valuesB, options = {}) {
   const totalN = nA + nB;
   const countInfo = combinationCountCapped(totalN, nA, maximumPermutations);
   const values = valuesA.concat(valuesB);
-  const totalSum = values.reduce((sum, value) => sum + value, 0);
-  const observedSumA = valuesA.reduce((sum, value) => sum + value, 0);
+  const totalSum = neumaierSum(values);
+  const observedSumA = neumaierSum(valuesA);
   const observedDifference = observedSumA / nA - (totalSum - observedSumA) / nB;
   if (countInfo.tooLarge) return { status: 'too-many-combinations', pValue: null, totalCount: 0, extremeCount: 0, observedDifference, estimatedCount: countInfo.count };
   const observedMagnitude = Math.abs(observedDifference);
@@ -1126,51 +1136,86 @@ export function fixedMarginExact(counts, options = {}) {
     + columnTotals.reduce((sum, value) => sum + logGamma(value + 1), 0)
     - logGamma(summary.total + 1);
   const observed = summary.statistic;
-  const tolerance = Math.max(1, observed) * 1e-12;
-  // 预计算 logGamma 缓存：消除枚举过程中的 logGamma 调用
+  // 预计算 logGamma 缓存
   const maxCellValue = Math.max(...rowTotals, ...columnTotals);
   const logGammaCache = new Array(maxCellValue + 1);
   for (let v = 0; v <= maxCellValue; v++) logGammaCache[v] = logGamma(v + 1);
+  // 预计算期望频数与倒数 + 后缀列容量（r×c 优化）
+  const expectedCache = [];
+  const expectedRecipCache = [];
+  for (let r = 0; r < rowCount; r++) {
+    expectedCache[r] = [];
+    expectedRecipCache[r] = [];
+    for (let c = 0; c < columnCount; c++) {
+      const exp = rowTotals[r] * columnTotals[c] / summary.total;
+      expectedCache[r][c] = exp;
+      expectedRecipCache[r][c] = exp > 0 ? 1 / exp : 0;
+    }
+  }
+  // 后缀容量：suffixCapacity[c] = remainingColumns[c+1..end] 之和
+  const suffixCapacity = new Array(columnCount + 1).fill(0);
+  const refreshSuffixCapacity = () => {
+    suffixCapacity[columnCount] = 0;
+    for (let c = columnCount - 1; c >= 0; c--) suffixCapacity[c] = suffixCapacity[c + 1] + remainingColumns[c];
+  };
+  refreshSuffixCapacity();
   const startedAt = Date.now();
   let tableCount = 0;
   let totalProbability = 0;
   let extremeProbability = 0;
+  // 对数空间累加（仅 2×2）
+  let logTotalProb = -Infinity;
+  let logExtremeProb = -Infinity;
   let stopped = null;
 
-  // 2×2 标准双侧 Fisher：按表概率排序（非 χ² 判据）
-  let observedProbability = 0;
+  // 2×2 标准双侧 Fisher：按表概率排序
+  let logObservedProb = -Infinity;
   if (isTwoByTwo) {
     let logDenom = 0;
     for (let r = 0; r < rowCount; r++) {
       for (let c = 0; c < columnCount; c++) logDenom += logGammaCache[counts[r][c]];
     }
-    observedProbability = Math.exp(logConstant - logDenom);
+    logObservedProb = logConstant - logDenom;
   }
 
   const evaluate = () => {
     tableCount += 1;
     if (tableCount > maximumTables) { stopped = 'too-many-tables'; return; }
     if ((tableCount & 1023) === 0 && Date.now() - startedAt > timeLimitMilliseconds) { stopped = 'timeout'; return; }
+    // 计算对数概率
     let logDenominator = 0;
-    for (let r = 0; r < rowCount; r += 1) {
-      for (let c = 0; c < columnCount; c += 1) logDenominator += logGammaCache[table[r][c]];
+    for (let r = 0; r < rowCount; r++) {
+      for (let c = 0; c < columnCount; c++) logDenominator += logGammaCache[table[r][c]];
     }
-    const probability = Math.exp(logConstant - logDenominator);
-    totalProbability += probability;
+    const logProb = logConstant - logDenominator;
     if (isTwoByTwo) {
-      // 标准双侧 Fisher：概率不大于观测表概率
-      if (probability <= observedProbability + 1e-12) extremeProbability += probability;
+      // 对数空间比较：概率不大于观测表概率（无固定容差）
+      totalProbability += Math.exp(logProb);
+      logTotalProb = logAddExp(logTotalProb, logProb);
+      if (logProb <= logObservedProb) {
+        extremeProbability += Math.exp(logProb);
+        logExtremeProb = logAddExp(logExtremeProb, logProb);
+      }
     } else {
-      // r×c：基于 Pearson χ² 极端性排序
-      const statistic = contingencyStatistics(table).statistic;
-      if (statistic + tolerance >= observed) extremeProbability += probability;
+      totalProbability += Math.exp(logProb);
+      // r×c：基于 Pearson χ² 极端性，增量计算统计量
+      let statistic = 0;
+      for (let r = 0; r < rowCount; r++) {
+        for (let c = 0; c < columnCount; c++) {
+          const diff = table[r][c] - expectedCache[r][c];
+          statistic += diff * diff * expectedRecipCache[r][c];
+        }
+      }
+      if (statistic >= observed) extremeProbability += Math.exp(logProb);
     }
   };
 
   function fillRow(rowIndex) {
     if (stopped) return;
     if (rowIndex === rowCount - 1) {
-      if (remainingColumns.reduce((sum, value) => sum + value, 0) !== rowTotals[rowIndex]) return;
+      let lastRowSum = 0;
+      for (let c = 0; c < columnCount; c++) lastRowSum += remainingColumns[c];
+      if (lastRowSum !== rowTotals[rowIndex]) return;
       for (let c = 0; c < columnCount; c += 1) table[rowIndex][c] = remainingColumns[c];
       evaluate();
       return;
@@ -1187,7 +1232,8 @@ export function fixedMarginExact(counts, options = {}) {
         remainingColumns[columnIndex] += value;
         return;
       }
-      const remainingCapacity = remainingColumns.slice(columnIndex + 1).reduce((sum, value) => sum + value, 0);
+      // 使用预计算后缀容量（columns[c+1..end] 不变，无需刷新）
+      const remainingCapacity = suffixCapacity[columnIndex + 1];
       const minimum = Math.max(0, remainingInRow - remainingCapacity);
       const maximum = Math.min(remainingInRow, remainingColumns[columnIndex]);
       for (let value = minimum; value <= maximum; value += 1) {
