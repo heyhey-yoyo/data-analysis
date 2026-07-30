@@ -462,7 +462,7 @@ function fillSelect(select, options, current) {
 
 function refreshSelectors() {
   const currentProfiles = profiles();
-  const numericHeaders = currentProfiles.filter((profile) => profile.isNumeric || profile.validNumeric >= 2).map((profile) => profile.header);
+  const numericHeaders = currentProfiles.filter((profile) => profile.eligibleForNumericAnalysis).map((profile) => profile.header);
   const valueOptions = numericHeaders.length ? numericHeaders : state.headers;
   if (!valueOptions.includes(state.valueColumn)) state.valueColumn = valueOptions[0] || '';
   if (!state.headers.includes(state.groupColumn)) state.groupColumn = state.headers.find((header) => header !== state.valueColumn) || state.headers[0] || '';
@@ -708,7 +708,7 @@ function numericSeries(header) {
 }
 
 function analyzeCorrelation(currentProfiles) {
-  const numericHeaders = currentProfiles.filter((profile) => profile.isNumeric && profile.validNumeric >= 3).map((profile) => profile.header);
+  const numericHeaders = currentProfiles.filter((profile) => profile.eligibleForNumericAnalysis).map((profile) => profile.header);
   const rows = [];
   for (let i = 0; i < numericHeaders.length; i += 1) {
     for (let j = i + 1; j < numericHeaders.length; j += 1) {
@@ -979,6 +979,7 @@ async function handleFile(file) {
 function parseGroupedText(text) {
   const lines = String(text).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const colonRows = [];
+  const errors = [];
   let allColon = lines.length > 0;
   lines.forEach((line) => {
     const match = line.match(/^([^:：]+?)\s*[:：]\s*(.+)$/);
@@ -988,22 +989,36 @@ function parseGroupedText(text) {
     const tokens = /[;；]/.test(body)
       ? body.split(/[;；，\s]+/).filter(Boolean)
       : body.split(/[，\s]+|,(?=\s*[-+]?\d)/).filter(Boolean);
+    let invalidCount = 0;
+    const invalidExamples = [];
     tokens.forEach((token) => {
       const parsed = parseNumeric(token, numberOptions());
-      if (parsed.kind === 'number') colonRows.push([label, String(parsed.value)]);
+      if (parsed.kind === 'number') {
+        colonRows.push([label, String(parsed.value)]);
+      } else if (parsed.kind === 'invalid') {
+        invalidCount++;
+        if (invalidExamples.length < 3) invalidExamples.push(token);
+      }
     });
+    if (invalidCount > 0) {
+      const preview = invalidExamples.map((s) => `"${s}"`).join('、');
+      errors.push({ message: `"${label}" 中 ${invalidCount} 个值无法解析为数字：${preview}${invalidCount > invalidExamples.length ? '…' : ''}，已排除` });
+    }
   });
-  if (allColon && colonRows.length) return { headers: ['组别', '数值'], rows: colonRows, delimiter: '分组格式', errors: [] };
+  if (allColon && colonRows.length) return { headers: ['组别', '数值'], rows: colonRows, delimiter: '分组格式', errors };
 
   const wide = parseDelimited(text);
-  if (wide.errors.some((error) => error.fatal)) return wide;
+  if (wide.errors.some((error) => error.fatal)) return { ...wide, errors: [...wide.errors, ...errors] };
   const rows = [];
+  let wideInvalid = 0;
   wide.headers.forEach((header, columnIndex) => {
     wide.rows.forEach((sourceRow) => {
       const parsed = parseNumeric(sourceRow[columnIndex], numberOptions());
       if (parsed.kind === 'number') rows.push([header, String(parsed.value)]);
+      else if (parsed.kind === 'invalid') wideInvalid++;
     });
   });
+  if (wideInvalid > 0) errors.push({ message: `宽表中有 ${wideInvalid} 个值无法解析为数字，已排除` });
   return rows.length
     ? { headers: ['组别', '数值'], rows, delimiter: wide.delimiter, errors: wide.errors }
     : { headers: [], rows: [], delimiter: wide.delimiter, errors: [{ fatal: true, message: '未识别到分组数值' }] };

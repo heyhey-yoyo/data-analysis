@@ -288,6 +288,7 @@ export function columnProfile(values, numberOptions = {}) {
   });
   const nonEmpty = values.length - missing;
   const numericRatio = nonEmpty ? numbers.length / nonEmpty : 0;
+  const eligibleForNumericAnalysis = numbers.length >= 3;
   return {
     total: values.length,
     missing,
@@ -298,6 +299,7 @@ export function columnProfile(values, numberOptions = {}) {
     unique: new Set(nonEmptyValues).size,
     numericRatio,
     isNumeric: nonEmpty > 0 && numericRatio >= 0.8,
+    eligibleForNumericAnalysis,
   };
 }
 
