@@ -4,7 +4,7 @@
 
 ## 项目概览
 
-**基础统计分析工具 v7（修复版）**——纯前端、浏览器本地计算的网页版统计分析工具。无后端、无构建步骤、无任何第三方依赖。v7 从 v6 的单文件结构重构为 ES Modules：统计核心（`src/core.mjs`）与 UI（`src/app.mjs`）分离，精确枚举计算放到 Web Worker（`src/worker.mjs`）。相对 v6 的修复清单见 `FIXES.md`（含 Mann–Whitney 连续性校正、CSV 解析、公式注入防护、文件大小限制等 18 项）。
+**基础统计分析工具 v2**——纯前端、浏览器本地计算的网页版统计分析工具。无后端、无构建步骤、无任何第三方依赖。v2 从 v1 的单文件结构重构为 ES Modules：统计核心（`src/core.mjs`）与 UI（`src/app.mjs`）分离，精确枚举计算放到 Web Worker（`src/worker.mjs`）。相对 v1 的修复清单见 `FIXES.md`（含 Mann–Whitney 连续性校正、CSV 解析、公式注入防护、文件大小限制等 18 项）。
 
 页面流程：选择分析 → 录入数据（CSV 上传 / 粘贴 / 内置示例）→ 查看结果。视觉风格延续 YDchenTools / WB-balancer：米白背景、青绿色主色（`#0d9488`）、白色圆角卡片。
 
@@ -19,11 +19,11 @@
 - `src/core.mjs`（911 行）：**纯函数统计核心**——描述统计、秩与相关、正态性/方差齐性/参数/非参数检验、事后比较与 `adjustPValues` 多重校正、精确枚举（`exactTwoSamplePermutation`、`fixedMarginExact`）、CSV 导出（`safeCsvCell` 防公式注入）。**不操作 DOM**，可直接被 Node.js 导入做回归测试。数字解析与概率分布已拆分到 `src/parsing.mjs` 与 `src/distributions.mjs`，本文件重导出以保持对外接口不变。
 - `src/parsing.mjs`（293 行）：数字解析（`parseNumeric`）、分隔符检测（`detectDelimiter`）、CSV/TSV 解析（`parseDelimited`）、字段画像（`columnProfile`、`extractNumeric`）。自包含模块，通过 `core.mjs` 重导出。
 - `src/distributions.mjs`（202 行）：概率分布与数值积分——`logGamma`、`regularizedGammaQ`/`Beta`、`chiSquareSurvival`、`fSurvival`、`tTwoSidedP`、`erf`、`normalCdf`、`inverseNormalCdf`、`normalTwoSidedP`、学生化极差分布（`studentizedRangeCdf`）。纯数学，通过 `core.mjs` 重导出。
-- `src/app.mjs`（1346 行）：UI、状态管理、导入导出、结果渲染。localStorage 键 `'basic-stat-tool-v7'`，并读取旧键 `'basic-stat-demo-v6'` 做迁移（迁移旧分析模式、`games/lsd/mann`、`postHocCorrection` 等枚举值）。
+- `src/app.mjs`（1346 行）：UI、状态管理、导入导出、结果渲染。localStorage 键 `'basic-stat-tool-v7'`（历史原因保留原名），并读取旧键 `'basic-stat-demo-v6'` 做迁移（迁移旧分析模式、`games/lsd/mann`、`postHocCorrection` 等枚举值）。
 - `src/worker.mjs`（18 行）：Web Worker，承接 `two-sample-permutation` 与 `fixed-margin-exact` 两种后台精确枚举任务。
 - `src/data/grouped-parser.mjs`（40 行）：分组文本解析 `tokenizeGroupBody`，处理 `组名: 1, 2, 3` 格式的数值拆分与歧义检测。
 - `_headers`：Cloudflare Pages 安全响应头（CSP 为 `default-src 'self'`、`connect-src 'none'` 等，注意不要引入与之冲突的远程资源或 inline 脚本）。
-- `FIXES.md`：v6→v7 修复矩阵与回归场景清单。
+- `FIXES.md`：v1→v2 修复矩阵与回归场景清单。
 - `test/core.test.mjs`：统计核心回归测试，`node test/core.test.mjs` 运行（无需部署）。
 - `test/grouped-parser.test.mjs`：分组文本解析回归测试，`node test/grouped-parser.test.mjs` 运行（无需部署）。
 - `README.md`：面向用户的部署与使用说明，改动功能时同步更新。
@@ -48,7 +48,7 @@ python -m http.server 8000
 
 - `core.mjs` 纯函数优先，**统计函数不直接操作 DOM**；`app.mjs` 才读写 DOM。
 - 2 空格缩进，单引号字符串，`const` 优先。
-- 渲染一律使用 `textContent` / `createElement`，**不用 `innerHTML` 拼接用户数据**（v7 中已无 innerHTML 用法，保持这一约定）。
+- 渲染一律使用 `textContent` / `createElement`，**不用 `innerHTML` 拼接用户数据**（v2 中已无 innerHTML 用法，保持这一约定）。
 - 导入限制：`MAX_FILE_BYTES = 10 MiB`、`MAX_IMPORT_ROWS = 100000`，大表格分页显示；超限要给出明确错误而不是静默截断。
 - 解析语义：区分 `number / missing / invalid` 三类；支持小数逗号；CSV 解析 quote-aware，未闭合引号返回 fatal error。
 - 数值无法计算时返回 `null` 并显示 `—`，不要抛异常；精确枚举超限要明确报告（`too-many-combinations / timeout / numerical-failure`），不伪装为精确结果。
