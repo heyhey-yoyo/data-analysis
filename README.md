@@ -75,8 +75,11 @@ python3 -m http.server 8080
 ## 测试
 
 ```bash
-node test/core.test.mjs      # 统计核心回归测试
-node --check src/core.mjs    # 语法检查
+node test/core.test.mjs               # 统计核心回归测试
+node test/grouped-parser.test.mjs     # 分组解析回归测试
+node --check src/core.mjs             # 语法检查
+node --check src/parsing.mjs
+node --check src/distributions.mjs
 node --check src/app.mjs
 node --check src/worker.mjs
 ```

@@ -1,3 +1,21 @@
+// 统计核心 —— 解析、分布函数、检验、事后比较、精确枚举、导出。
+// 解析与分布函数已分别提取到 parsing.mjs / distributions.mjs，此处重导出以保持对外接口不变。
+
+// ---- 重导出子模块（保持对 app.mjs / worker.mjs / 测试的接口不变） ----
+export { parseNumeric, detectDelimiter, parseDelimited, columnProfile, extractNumeric } from './parsing.mjs';
+import {
+  logGamma, chiSquareSurvival, fSurvival, tTwoSidedP,
+  normalCdf, inverseNormalCdf, normalTwoSidedP,
+  studentizedRangeCdf, regularizedGammaQ, regularizedBeta, erf,
+} from './distributions.mjs';
+export {
+  logGamma, regularizedGammaQ, regularizedBeta,
+  chiSquareSurvival, fSurvival, tTwoSidedP,
+  erf, normalCdf, inverseNormalCdf, normalTwoSidedP,
+  studentizedRangeCdf,
+} from './distributions.mjs';
+
+// ---- 常量与基础工具 ----
 export const ALPHA = 0.05;
 export const MAX_IMPORT_ROWS = 100000;
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -30,297 +48,7 @@ function logAddExp(logA, logB) {
   return max + Math.log1p(Math.exp(-Math.abs(logA - logB)));
 }
 
-export function parseNumeric(rawValue, options = {}) {
-  const {
-    decimalSeparator = 'auto',
-    percentMode = 'number',
-  } = options;
-
-  if (rawValue === null || rawValue === undefined) return { kind: 'missing', value: null, raw: '' };
-  const raw = String(rawValue);
-  let text = raw.trim();
-  if (!text) return { kind: 'missing', value: null, raw };
-
-  text = text
-    .replace(/[−–—]/g, '-')
-    .replace(/[\u00a0\u202f\s]/g, '');
-
-  let isPercent = false;
-  if (/[%％]$/.test(text)) {
-    isPercent = true;
-    text = text.slice(0, -1);
-  }
-  if (!text) return { kind: 'invalid', value: null, raw, reason: '百分号前缺少数字' };
-
-  const signPattern = '[+-]?';
-  const integerPattern = '\\d+';
-  const dotGrouped = new RegExp(`^${signPattern}\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?$`);
-  const commaGrouped = new RegExp(`^${signPattern}\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?$`);
-  const plainDot = new RegExp(`^${signPattern}(?:${integerPattern}(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$`);
-  const plainComma = new RegExp(`^${signPattern}(?:${integerPattern}(?:,\\d*)?|,\\d+)(?:[eE][+-]?\\d+)?$`);
-
-  let normalized = text;
-  const commaCount = (text.match(/,/g) || []).length;
-  const dotCount = (text.match(/\./g) || []).length;
-
-  if (decimalSeparator === 'dot') {
-    if (commaCount) {
-      if (!commaGrouped.test(text)) {
-        return { kind: 'invalid', value: null, raw, reason: '逗号格式无法按千分位解析' };
-      }
-      normalized = text.replaceAll(',', '');
-    }
-    if (!plainDot.test(normalized)) return { kind: 'invalid', value: null, raw, reason: '不是有效数字' };
-  } else if (decimalSeparator === 'comma') {
-    if (commaCount) {
-      if (dotCount && !dotGrouped.test(text)) {
-        return { kind: 'invalid', value: null, raw, reason: '小数逗号与千分位格式不一致' };
-      }
-      normalized = text.replaceAll('.', '').replace(',', '.');
-    } else {
-      normalized = text;
-    }
-    if (!plainDot.test(normalized)) return { kind: 'invalid', value: null, raw, reason: '不是有效数字' };
-  } else {
-    if (commaCount && dotCount) {
-      const lastComma = text.lastIndexOf(',');
-      const lastDot = text.lastIndexOf('.');
-      if (lastComma > lastDot) {
-        if (!dotGrouped.test(text)) return { kind: 'invalid', value: null, raw, reason: '混合分隔符格式不一致' };
-        normalized = text.replaceAll('.', '').replace(',', '.');
-      } else {
-        if (!commaGrouped.test(text)) return { kind: 'invalid', value: null, raw, reason: '混合分隔符格式不一致' };
-        normalized = text.replaceAll(',', '');
-      }
-    } else if (commaCount) {
-      if (commaGrouped.test(text)) {
-        normalized = text.replaceAll(',', '');
-      } else if (commaCount === 1 && plainComma.test(text)) {
-        normalized = text.replace(',', '.');
-      } else {
-        return { kind: 'invalid', value: null, raw, reason: '逗号数字格式不明确' };
-      }
-    }
-    if (!plainDot.test(normalized)) return { kind: 'invalid', value: null, raw, reason: '不是有效数字' };
-  }
-
-  let value = Number(normalized);
-  if (!Number.isFinite(value)) return { kind: 'invalid', value: null, raw, reason: '数值超出范围' };
-  if (isPercent && percentMode === 'fraction') value /= 100;
-  return { kind: 'number', value, raw, isPercent };
-}
-
-function logicalRecords(text, maximum = 30) {
-  const records = [];
-  let record = '';
-  let quoted = false;
-  for (let index = 0; index < text.length && records.length < maximum; index += 1) {
-    const char = text[index];
-    const next = text[index + 1];
-    if (char === '"') {
-      record += char;
-      if (quoted && next === '"') {
-        record += next;
-        index += 1;
-      } else {
-        quoted = !quoted;
-      }
-    } else if ((char === '\n' || char === '\r') && !quoted) {
-      if (char === '\r' && next === '\n') index += 1;
-      if (record.trim()) records.push(record);
-      record = '';
-    } else {
-      record += char;
-    }
-  }
-  if (record.trim() && records.length < maximum) records.push(record);
-  return records;
-}
-
-function countOutsideQuotes(record, delimiter) {
-  let quoted = false;
-  let count = 0;
-  for (let index = 0; index < record.length; index += 1) {
-    const char = record[index];
-    const next = record[index + 1];
-    if (char === '"') {
-      if (quoted && next === '"') index += 1;
-      else quoted = !quoted;
-    } else if (!quoted && char === delimiter) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
-export function detectDelimiter(text) {
-  const records = logicalRecords(String(text).replace(/^\uFEFF/, ''), 30);
-  if (!records.length) return ',';
-  const candidates = ['\t', ';', ','];
-  const scored = candidates.map((delimiter) => {
-    const counts = records.map((record) => countOutsideQuotes(record, delimiter));
-    const positive = counts.filter((count) => count > 0);
-    if (!positive.length) return { delimiter, score: 0, mode: 0 };
-    const frequencies = new Map();
-    positive.forEach((count) => frequencies.set(count, (frequencies.get(count) || 0) + 1));
-    let mode = positive[0];
-    let modeFrequency = 0;
-    frequencies.forEach((frequency, count) => {
-      if (frequency > modeFrequency || (frequency === modeFrequency && count > mode)) {
-        mode = count;
-        modeFrequency = frequency;
-      }
-    });
-    const coverage = positive.length / records.length;
-    const consistency = modeFrequency / positive.length;
-    return { delimiter, mode, score: mode * 100 + coverage * 20 + consistency * 10 };
-  });
-  scored.sort((a, b) => b.score - a.score || candidates.indexOf(a.delimiter) - candidates.indexOf(b.delimiter));
-  return scored[0].score > 0 ? scored[0].delimiter : ',';
-}
-
-export function parseDelimited(text, options = {}) {
-  const source = String(text ?? '').replace(/^\uFEFF/, '');
-  const delimiter = options.delimiter || detectDelimiter(source);
-  const parsedRows = [];
-  const errors = [];
-  let row = [];
-  let cell = '';
-  let inQuotes = false;
-  let quotedCell = false;
-  let justClosedQuote = false;
-
-  const pushCell = () => {
-    row.push(quotedCell ? cell : cell.trim());
-    cell = '';
-    quotedCell = false;
-    justClosedQuote = false;
-  };
-  const pushRow = () => {
-    if (row.some((value) => value !== '')) parsedRows.push(row);
-    row = [];
-  };
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    const next = source[index + 1];
-    if (inQuotes) {
-      if (char === '"' && next === '"') {
-        cell += '"';
-        index += 1;
-      } else if (char === '"') {
-        inQuotes = false;
-        justClosedQuote = true;
-      } else {
-        cell += char;
-      }
-      continue;
-    }
-
-    if (char === '"' && cell.trim() === '' && !quotedCell) {
-      cell = '';
-      quotedCell = true;
-      inQuotes = true;
-    } else if (char === delimiter) {
-      pushCell();
-    } else if (char === '\n' || char === '\r') {
-      if (char === '\r' && next === '\n') index += 1;
-      pushCell();
-      pushRow();
-    } else if (justClosedQuote && /\s/.test(char)) {
-      // 容忍结束引号与分隔符之间的空白。
-    } else {
-      if (justClosedQuote) {
-        errors.push({ code: 'CHAR_AFTER_QUOTE', index, message: '结束引号后出现非分隔字符' });
-        justClosedQuote = false;
-      }
-      cell += char;
-    }
-  }
-
-  if (inQuotes) {
-    errors.push({ code: 'UNCLOSED_QUOTE', index: source.length, fatal: true, message: '文件中存在未闭合的引号' });
-  }
-  pushCell();
-  pushRow();
-
-  if (!parsedRows.length) return { headers: [], rows: [], delimiter, errors };
-  if (parsedRows.length > MAX_IMPORT_ROWS + 1) {
-    errors.push({ code: 'TOO_MANY_ROWS', fatal: true, message: `最多支持 ${MAX_IMPORT_ROWS.toLocaleString()} 行数据` });
-  }
-
-  if (options.header === false) {
-    const width = Math.max(...parsedRows.map((item) => item.length));
-    const rows = parsedRows.slice(0, MAX_IMPORT_ROWS).map((item) => Array.from({ length: width }, (_, index) => item[index] ?? ''));
-    return { headers: [], rows, delimiter, errors };
-  }
-
-  const width = Math.max(...parsedRows.map((item) => item.length));
-  const rawHeaders = parsedRows[0];
-  const headers = [];
-  for (let index = 0; index < width; index += 1) {
-    const base = String(rawHeaders[index] ?? '').trim() || `字段 ${index + 1}`;
-    let name = base;
-    let suffix = 2;
-    while (headers.includes(name)) {
-      name = `${base} (${suffix})`;
-      suffix += 1;
-    }
-    headers.push(name);
-  }
-  const rows = parsedRows.slice(1, MAX_IMPORT_ROWS + 1).map((item) => headers.map((_, index) => item[index] ?? ''));
-  return { headers, rows, delimiter, errors };
-}
-
-export function columnProfile(values, numberOptions = {}) {
-  let missing = 0;
-  let invalid = 0;
-  const numbers = [];
-  const nonEmptyValues = [];
-  values.forEach((raw) => {
-    const parsed = parseNumeric(raw, numberOptions);
-    if (parsed.kind === 'missing') missing += 1;
-    else {
-      nonEmptyValues.push(String(raw));
-      if (parsed.kind === 'number') numbers.push(parsed.value);
-      else invalid += 1;
-    }
-  });
-  const nonEmpty = values.length - missing;
-  const numericRatio = nonEmpty ? numbers.length / nonEmpty : 0;
-  const eligibleForNumericAnalysis = numbers.length >= 3 && numericRatio >= 0.8;
-  return {
-    total: values.length,
-    missing,
-    nonEmpty,
-    validNumeric: numbers.length,
-    invalid,
-    numbers,
-    unique: new Set(nonEmptyValues).size,
-    numericRatio,
-    isNumeric: nonEmpty > 0 && numericRatio >= 0.8,
-    eligibleForNumericAnalysis,
-  };
-}
-
-export function extractNumeric(values, options = {}) {
-  const { missingMode = 'ignore', numberOptions = {} } = options;
-  const numbers = [];
-  const invalidRows = [];
-  const missingRows = [];
-  values.forEach((raw, index) => {
-    const parsed = parseNumeric(raw, numberOptions);
-    if (parsed.kind === 'number') numbers.push(parsed.value);
-    else if (parsed.kind === 'missing') {
-      missingRows.push(index);
-      if (missingMode === 'zero') numbers.push(0);
-    } else {
-      invalidRows.push(index);
-    }
-  });
-  return { numbers, invalidRows, missingRows };
-}
-
+// ---- 描述统计 ----
 export function quantile(sortedValues, probability) {
   const sorted = sortedValues.slice().sort((a, b) => a - b);
   if (!sorted.length) return null;
@@ -361,158 +89,7 @@ export function stats(values) {
   };
 }
 
-export function logGamma(value) {
-  const coefficients = [
-    676.5203681218851, -1259.1392167224028, 771.32342877765313,
-    -176.61502916214059, 12.507343278686905, -0.13857109526572012,
-    9.9843695780195716e-6, 1.5056327351493116e-7,
-  ];
-  if (value < 0.5) return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * value)) - logGamma(1 - value);
-  const adjusted = value - 1;
-  let series = 0.99999999999980993;
-  coefficients.forEach((coefficient, index) => { series += coefficient / (adjusted + index + 1); });
-  const base = adjusted + coefficients.length - 0.5;
-  return 0.5 * Math.log(2 * Math.PI) + (adjusted + 0.5) * Math.log(base) - base + Math.log(series);
-}
-
-export function regularizedGammaQ(shape, value) {
-  if (!(shape > 0) || value < 0 || !Number.isFinite(value)) return null;
-  if (value === 0) return 1;
-  const epsilon = 1e-14;
-  const tiny = 1e-300;
-  const logScale = -value + shape * Math.log(value) - logGamma(shape);
-  if (value < shape + 1) {
-    let term = 1 / shape;
-    let sum = term;
-    let denominator = shape;
-    for (let index = 1; index <= 10000; index += 1) {
-      denominator += 1;
-      term *= value / denominator;
-      sum += term;
-      if (Math.abs(term) < Math.abs(sum) * epsilon) break;
-    }
-    return clampProbability(1 - sum * Math.exp(logScale));
-  }
-  let b = value + 1 - shape;
-  let c = 1 / tiny;
-  let d = 1 / Math.max(Math.abs(b), tiny) * Math.sign(b || 1);
-  let fraction = d;
-  for (let index = 1; index <= 10000; index += 1) {
-    const coefficient = -index * (index - shape);
-    b += 2;
-    d = coefficient * d + b;
-    if (Math.abs(d) < tiny) d = tiny;
-    c = b + coefficient / c;
-    if (Math.abs(c) < tiny) c = tiny;
-    d = 1 / d;
-    const delta = d * c;
-    fraction *= delta;
-    if (Math.abs(delta - 1) < epsilon) break;
-  }
-  return clampProbability(Math.exp(logScale) * fraction);
-}
-
-function betaContinuedFraction(a, b, x) {
-  const maxIterations = 300;
-  const epsilon = 3e-14;
-  const tiny = 1e-300;
-  const qab = a + b;
-  const qap = a + 1;
-  const qam = a - 1;
-  let c = 1;
-  let d = 1 - qab * x / qap;
-  if (Math.abs(d) < tiny) d = tiny;
-  d = 1 / d;
-  let h = d;
-  for (let m = 1; m <= maxIterations; m += 1) {
-    const m2 = 2 * m;
-    let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
-    d = 1 + aa * d;
-    if (Math.abs(d) < tiny) d = tiny;
-    c = 1 + aa / c;
-    if (Math.abs(c) < tiny) c = tiny;
-    d = 1 / d;
-    h *= d * c;
-    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
-    d = 1 + aa * d;
-    if (Math.abs(d) < tiny) d = tiny;
-    c = 1 + aa / c;
-    if (Math.abs(c) < tiny) c = tiny;
-    d = 1 / d;
-    const delta = d * c;
-    h *= delta;
-    if (Math.abs(delta - 1) < epsilon) break;
-  }
-  return h;
-}
-
-export function regularizedBeta(x, a, b) {
-  if (!(a > 0) || !(b > 0) || x < 0 || x > 1) return null;
-  if (x === 0) return 0;
-  if (x === 1) return 1;
-  const bt = Math.exp(logGamma(a + b) - logGamma(a) - logGamma(b) + a * Math.log(x) + b * Math.log1p(-x));
-  if (x < (a + 1) / (a + b + 2)) return bt * betaContinuedFraction(a, b, x) / a;
-  return 1 - bt * betaContinuedFraction(b, a, 1 - x) / b;
-}
-
-export function chiSquareSurvival(statistic, degreesOfFreedom) {
-  if (!Number.isFinite(statistic) || !(degreesOfFreedom > 0)) return null;
-  return regularizedGammaQ(degreesOfFreedom / 2, statistic / 2);
-}
-
-export function fSurvival(statistic, df1, df2) {
-  if (!Number.isFinite(statistic) || statistic < 0 || !(df1 > 0) || !(df2 > 0)) return null;
-  const x = df2 / (df2 + df1 * statistic);
-  return regularizedBeta(x, df2 / 2, df1 / 2);
-}
-
-export function tTwoSidedP(statistic, degreesOfFreedom) {
-  if (!Number.isFinite(statistic) || !(degreesOfFreedom > 0)) return null;
-  const x = degreesOfFreedom / (degreesOfFreedom + statistic * statistic);
-  return regularizedBeta(x, degreesOfFreedom / 2, 0.5);
-}
-
-export function erf(value) {
-  const sign = value < 0 ? -1 : 1;
-  const x = Math.abs(value);
-  const t = 1 / (1 + 0.3275911 * x);
-  const polynomial = (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
-  return sign * (1 - polynomial * Math.exp(-x * x));
-}
-
-export function normalCdf(value) {
-  return clampProbability(0.5 * (1 + erf(value / Math.SQRT2)));
-}
-
-export function inverseNormalCdf(probability) {
-  const p = Math.max(1e-12, Math.min(1 - 1e-12, probability));
-  const a = [-39.6968302866538, 220.946098424521, -275.928510446969, 138.357751867269, -30.6647980661472, 2.50662827745924];
-  const b = [-54.4760987982241, 161.585836858041, -155.698979859887, 66.8013118877197, -13.2806815528857];
-  const c = [-0.00778489400243029, -0.322396458041136, -2.40075827716184, -2.54973253934373, 4.37466414146497, 2.93816398269878];
-  const d = [0.00778469570904146, 0.32246712907004, 2.445134137143, 3.75440866190742];
-  const lower = 0.02425;
-  const upper = 1 - lower;
-  if (p < lower) {
-    const q = Math.sqrt(-2 * Math.log(p));
-    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
-      / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
-  }
-  if (p > upper) {
-    const q = Math.sqrt(-2 * Math.log(1 - p));
-    return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5])
-      / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
-  }
-  const q = p - 0.5;
-  const r = q * q;
-  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q
-    / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
-}
-
-export function normalTwoSidedP(z) {
-  if (!Number.isFinite(z)) return null;
-  return clampProbability(2 * (1 - normalCdf(Math.abs(z))));
-}
-
+// ---- 秩与相关 ----
 export function rankValues(values) {
   const indexed = values.map((value, index) => ({ value, index })).sort((a, b) => a.value - b.value);
   const ranks = new Array(values.length);
@@ -622,7 +199,6 @@ function mannWhitneyExactP(n1, n2, uObserved) {
   const meanU = n1 * n2 / 2;
   const obsDiff = Math.abs(uObserved - meanU);
   let total = 0, extreme = 0;
-  const started = Date.now();
   function enumerate(idx, selected, sum) {
     if (selected === n1) {
       const u = sum - correction;
@@ -665,6 +241,7 @@ export function distributionMoments(values) {
   return { n, skewness, kurtosis, excessKurtosis: kurtosis - 3, variance: m2 };
 }
 
+// ---- 正态性检验 ----
 function normalityResultBase(values, key, name, minimumN) {
   const clean = values.filter(Number.isFinite);
   const moments = distributionMoments(clean);
@@ -801,6 +378,7 @@ export function runNormalityTest(values, requestedMethod = 'auto') {
   };
 }
 
+// ---- 方差检验 ----
 export function oneWayAnova(groups) {
   const cleanGroups = groups.map((group) => group.filter(Number.isFinite)).filter((group) => group.length);
   const k = cleanGroups.length;
@@ -882,6 +460,7 @@ export function runVarianceTest(groups, normalityResults = [], requestedMethod =
   return { ...result, selectedByAuto: requestedMethod === 'auto', recommendationReason: automatic.reason, automaticKey: automatic.key };
 }
 
+// ---- 参数与非参数检验 ----
 export function pooledTTest(valuesA, valuesB) {
   const a = stats(valuesA);
   const b = stats(valuesB);
@@ -975,6 +554,7 @@ export function kruskalWallis(groups) {
   return { statistic, df, pValue: chiSquareSurvival(statistic, df), epsilonSquared: Math.max(0, (statistic - k + 1) / (totalN - k)) };
 }
 
+// ---- 事后多重比较 ----
 export function adjustPValues(pValues, method = 'holm') {
   const clean = pValues.map((value) => Number.isFinite(value) ? clampProbability(value) : 1);
   const count = clean.length;
@@ -997,54 +577,6 @@ export function adjustPValues(pValues, method = 'holm') {
     adjusted[item.index] = runningMaximum;
   });
   return adjusted;
-}
-
-function simpsonIntegral(fn, start, end, intervals) {
-  const n = intervals % 2 === 0 ? intervals : intervals + 1;
-  const step = (end - start) / n;
-  let total = fn(start) + fn(end);
-  for (let index = 1; index < n; index += 1) total += (index % 2 ? 4 : 2) * fn(start + index * step);
-  return total * step / 3;
-}
-
-const studentizedRangeCache = new Map();
-const MAX_SR_CACHE_SIZE = 10000;
-export function studentizedRangeInfiniteCdf(q, groupCount) {
-  if (!(q > 0)) return 0;
-  if (q >= 14) return 1;
-  return clampProbability(simpsonIntegral((x) => {
-    const intervalProbability = Math.max(0, normalCdf(x + q) - normalCdf(x));
-    const density = Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
-    return groupCount * density * intervalProbability ** (groupCount - 1);
-  }, -8, 8, 160));
-}
-
-export function studentizedRangeCdf(q, groupCount, degreesOfFreedom) {
-  if (!(q > 0) || groupCount < 2 || !(degreesOfFreedom > 0)) return 0;
-  const roundedQ = Math.round(q * 100000) / 100000;
-  const roundedDf = Math.round(degreesOfFreedom * 1000) / 1000;
-  const cacheKey = `${roundedQ}|${groupCount}|${roundedDf}`;
-  if (studentizedRangeCache.has(cacheKey)) return studentizedRangeCache.get(cacheKey);
-  let result;
-  if (degreesOfFreedom > 100000) {
-    result = studentizedRangeInfiniteCdf(q, groupCount);
-  } else {
-    const upper = Math.sqrt((degreesOfFreedom + 12 * Math.sqrt(2 * degreesOfFreedom) + 50) / degreesOfFreedom);
-    const logConstant = Math.log(2) + degreesOfFreedom / 2 * Math.log(degreesOfFreedom / 2) - logGamma(degreesOfFreedom / 2);
-    const intervals = degreesOfFreedom > 1000 ? 160 : 120;
-    result = simpsonIntegral((scale) => {
-      if (scale === 0) return 0;
-      const logDensity = logConstant + (degreesOfFreedom - 1) * Math.log(scale) - degreesOfFreedom * scale * scale / 2;
-      return studentizedRangeInfiniteCdf(q * scale, groupCount) * Math.exp(logDensity);
-    }, 0, upper, intervals);
-  }
-  result = clampProbability(result);
-  if (studentizedRangeCache.size >= MAX_SR_CACHE_SIZE) {
-    // 超过容量上限时清空缓存（简单策略，避免内存无限增长）
-    studentizedRangeCache.clear();
-  }
-  studentizedRangeCache.set(cacheKey, result);
-  return result;
 }
 
 export function postHocComparisons(labels, groups, method = 'welch', correction = 'holm') {
@@ -1136,6 +668,7 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
   return rows.map((row, index) => ({ ...row, adjustedP: adjusted[index] }));
 }
 
+// ---- 精确枚举 ----
 export function combinationCountCapped(total, selected, cap) {
   if (!Number.isInteger(total) || !Number.isInteger(selected) || selected < 0 || selected > total) return { count: 0, tooLarge: false };
   const choose = Math.min(selected, total - selected);
@@ -1362,6 +895,7 @@ export function fixedMarginExact(counts, options = {}) {
   return { status: 'exact', pValue, tableCount, observedStatistic: observed, method: 'pearson-chi-squared-exact' };
 }
 
+// ---- CSV 导出 ----
 export function safeCsvCell(value) {
   if (value === null || value === undefined) return '';
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);

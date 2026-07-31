@@ -26,11 +26,14 @@
 ## 架构
 
 ```text
-index.html       页面结构
-styles.css       样式
-src/core.mjs     纯函数：解析、统计、导出
-src/app.mjs      UI、状态、导入导出、结果展示
-src/worker.mjs   精确枚举后台计算
+index.html                页面结构
+styles.css                样式
+src/core.mjs              纯函数：统计检验、事后比较、精确枚举、导出
+src/parsing.mjs           数字解析与 CSV 解析（← core.mjs 重导出）
+src/distributions.mjs     概率分布与数值积分（← core.mjs 重导出）
+src/data/grouped-parser.mjs  分组文本解析
+src/app.mjs               UI、状态、导入导出、结果展示
+src/worker.mjs            精确枚举后台计算
 ```
 
 统计核心与 DOM 分离，`core.mjs` 可直接由 Node.js 回归测试导入。
