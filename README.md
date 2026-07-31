@@ -80,8 +80,10 @@ node test/grouped-parser.test.mjs     # 分组解析回归测试
 node --check src/core.mjs             # 语法检查
 node --check src/parsing.mjs
 node --check src/distributions.mjs
+node --check src/constants.mjs
 node --check src/app.mjs
 node --check src/worker.mjs
+node --check src/data/grouped-parser.mjs
 ```
 
 ## 范围与注意事项

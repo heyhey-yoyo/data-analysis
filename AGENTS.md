@@ -16,7 +16,8 @@
 
 - `index.html`（287 行）：全部页面结构，通过 `<script type="module" src="./src/app.mjs">` 加载入口。
 - `styles.css`（298 行）：全部样式。
-- `src/core.mjs`（911 行）：**纯函数统计核心**——描述统计、秩与相关、正态性/方差齐性/参数/非参数检验、事后比较与 `adjustPValues` 多重校正、精确枚举（`exactTwoSamplePermutation`、`fixedMarginExact`）、CSV 导出（`safeCsvCell` 防公式注入）。**不操作 DOM**，可直接被 Node.js 导入做回归测试。数字解析与概率分布已拆分到 `src/parsing.mjs` 与 `src/distributions.mjs`，本文件重导出以保持对外接口不变。
+- `src/core.mjs`（911 行）：**纯函数统计核心**——描述统计、秩与相关、正态性/方差齐性/参数/非参数检验、事后比较与 `adjustPValues` 多重校正、精确枚举（`exactTwoSamplePermutation`、`fixedMarginExact`）、CSV 导出（`safeCsvCell` 防公式注入）。**不操作 DOM**，可直接被 Node.js 导入做回归测试。数字解析、概率分布与常量已拆分到 `src/parsing.mjs`、`src/distributions.mjs`、`src/constants.mjs`，本文件重导出以保持对外接口不变。
+- `src/constants.mjs`：共享常量与基础工具——`ALPHA`、`MAX_IMPORT_ROWS`、`MAX_FILE_BYTES`、`clampProbability`。parsing / distributions 单向依赖它，避免模块间循环依赖；core.mjs 重导出保持对外接口不变。
 - `src/parsing.mjs`（293 行）：数字解析（`parseNumeric`）、分隔符检测（`detectDelimiter`）、CSV/TSV 解析（`parseDelimited`）、字段画像（`columnProfile`、`extractNumeric`）。自包含模块，通过 `core.mjs` 重导出。
 - `src/distributions.mjs`（202 行）：概率分布与数值积分——`logGamma`、`regularizedGammaQ`/`Beta`、`chiSquareSurvival`、`fSurvival`、`tTwoSidedP`、`erf`、`normalCdf`、`inverseNormalCdf`、`normalTwoSidedP`、学生化极差分布（`studentizedRangeCdf`）。纯数学，通过 `core.mjs` 重导出。
 - `src/app.mjs`（1346 行）：UI、状态管理、导入导出、结果渲染。localStorage 键 `'basic-stat-tool-v7'`（历史原因保留原名），并读取旧键 `'basic-stat-demo-v6'` 做迁移（迁移旧分析模式、`games/lsd/mann`、`postHocCorrection` 等枚举值）。
@@ -40,7 +41,7 @@ python -m http.server 8000
 ## 测试与验证
 
 - 回归测试：`node test/core.test.mjs` + `node test/grouped-parser.test.mjs`——覆盖 studentized range 连续性（df=200/201、审计回归点、k=2 对照 t 分布、k=30 对照蒙特卡洛）、Mann–Whitney 中心点校正、protected Fisher LSD 前置条件、分组文本解析歧义检测。修改统计计算后必须运行。
-- 语法检查：`node --check src/core.mjs && node --check src/parsing.mjs && node --check src/distributions.mjs && node --check src/app.mjs && node --check src/worker.mjs`。
+- 语法检查：`node --check src/core.mjs && node --check src/parsing.mjs && node --check src/distributions.mjs && node --check src/constants.mjs && node --check src/app.mjs && node --check src/worker.mjs && node --check src/data/grouped-parser.mjs`。
 - 统计逻辑回归：`core.mjs` 全部为纯函数导出，可写 Node 脚本直接 `import` 后断言结果。
 - 浏览器手动验证：载入内置示例数据，确认结果表与诊断渲染正常；重点核对 `FIXES.md` 列出的 14 个回归场景。
 

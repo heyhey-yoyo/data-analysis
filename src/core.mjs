@@ -1,8 +1,10 @@
 // 统计核心 —— 解析、分布函数、检验、事后比较、精确枚举、导出。
-// 解析与分布函数已分别提取到 parsing.mjs / distributions.mjs，此处重导出以保持对外接口不变。
+// 解析与分布函数已分别提取到 parsing.mjs / distributions.mjs，常量见 constants.mjs，
+// 此处重导出以保持对外接口不变。
 
-// ---- 重导出子模块（保持对 app.mjs / worker.mjs / 测试的接口不变） ----
+// ---- 重导出子模块与常量（保持对 app.mjs / worker.mjs / 测试的接口不变） ----
 export { parseNumeric, detectDelimiter, parseDelimited, columnProfile, extractNumeric } from './parsing.mjs';
+export { ALPHA, MAX_IMPORT_ROWS, MAX_FILE_BYTES, clampProbability } from './constants.mjs';
 import {
   logGamma, chiSquareSurvival, fSurvival, tTwoSidedP,
   normalCdf, inverseNormalCdf, normalTwoSidedP,
@@ -14,15 +16,7 @@ export {
   erf, normalCdf, inverseNormalCdf, normalTwoSidedP,
   studentizedRangeCdf,
 } from './distributions.mjs';
-
-// ---- 常量与基础工具 ----
-export const ALPHA = 0.05;
-export const MAX_IMPORT_ROWS = 100000;
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;
-
-export function clampProbability(value) {
-  return Math.max(0, Math.min(1, value));
-}
+import { ALPHA, MAX_IMPORT_ROWS, MAX_FILE_BYTES, clampProbability } from './constants.mjs';
 
 // Neumaier 补偿求和：比 Kahan 对大值更稳定
 function neumaierSum(values) {
@@ -61,8 +55,21 @@ export function quantile(sortedValues, probability) {
     : sorted[base] + fraction * (sorted[base + 1] - sorted[base]);
 }
 
+// 内部变体：假设输入已升序，跳过重复排序（stats 内部使用；公共 quantile 保持防御性排序不变）
+function quantileSorted(sortedValues, probability) {
+  if (!sortedValues.length) return null;
+  if (sortedValues.length === 1) return sortedValues[0];
+  const position = (sortedValues.length - 1) * probability;
+  const base = Math.floor(position);
+  const fraction = position - base;
+  return sortedValues[base + 1] === undefined
+    ? sortedValues[base]
+    : sortedValues[base] + fraction * (sortedValues[base + 1] - sortedValues[base]);
+}
+
 export function stats(values) {
-  const clean = values.filter(Number.isFinite).slice().sort((a, b) => a - b);
+  // filter 已返回新数组，可直接原地排序，不修改调用者数据
+  const clean = values.filter(Number.isFinite).sort((a, b) => a - b);
   if (!clean.length) return null;
   const count = clean.length;
   // Neumaier 补偿求和算均值，两趟法算方差（均值精确后偏差更准确）
@@ -80,10 +87,10 @@ export function stats(values) {
     mean,
     variance,
     sd: Math.sqrt(variance),
-    sem: count > 0 ? Math.sqrt(variance / count) : null,
-    median: quantile(clean, 0.5),
-    q1: quantile(clean, 0.25),
-    q3: quantile(clean, 0.75),
+    sem: Math.sqrt(variance / count),
+    median: quantileSorted(clean, 0.5),
+    q1: quantileSorted(clean, 0.25),
+    q3: quantileSorted(clean, 0.75),
     min: clean[0],
     max: clean[clean.length - 1],
   };
@@ -596,11 +603,13 @@ export function postHocComparisons(labels, groups, method = 'welch', correction 
   const rankOffsets = [];
   let offset = 0;
   groups.forEach((group) => { rankOffsets.push(offset); offset += group.length; });
+  // 每组只算一次描述统计，避免双层循环内对同组重复计算（stats 为确定性纯函数，结果不变）
+  const groupStats = groups.map(stats);
 
   for (let i = 0; i < groups.length; i += 1) {
     for (let j = i + 1; j < groups.length; j += 1) {
-      const a = stats(groups[i]);
-      const b = stats(groups[j]);
+      const a = groupStats[i];
+      const b = groupStats[j];
       if (!a || !b) continue;
       let statistic = null;
       let df = null;

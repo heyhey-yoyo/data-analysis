@@ -1,5 +1,5 @@
-// 数字解析与 CSV 解析 —— 从 core.mjs 提取，纯函数，不操作 DOM。
-import { MAX_IMPORT_ROWS } from './core.mjs';
+// 数字解析与 CSV 解析 —— 纯函数，不操作 DOM。
+import { MAX_IMPORT_ROWS } from './constants.mjs';
 
 export function parseNumeric(rawValue, options = {}) {
   const {

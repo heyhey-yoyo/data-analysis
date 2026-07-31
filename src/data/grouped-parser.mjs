@@ -1,4 +1,4 @@
-import { parseNumeric } from '../core.mjs';
+import { parseNumeric } from '../parsing.mjs';
 
 export function tokenizeGroupBody(body, decSep, numOpts) {
   const spaceTokens = body.split(/[;；\s]+/).filter(Boolean);

@@ -721,11 +721,13 @@ function numericSeries(header) {
 
 function analyzeCorrelation(currentProfiles) {
   const numericHeaders = currentProfiles.filter((profile) => profile.eligibleForNumericAnalysis).map((profile) => profile.header);
+  // 每列只解析一次，避免双循环内对同列重复解析（parseNumeric 确定性，结果不变）
+  const series = new Map(numericHeaders.map((header) => [header, numericSeries(header)]));
   const rows = [];
   for (let i = 0; i < numericHeaders.length; i += 1) {
     for (let j = i + 1; j < numericHeaders.length; j += 1) {
-      const a = numericSeries(numericHeaders[i]);
-      const b = numericSeries(numericHeaders[j]);
+      const a = series.get(numericHeaders[i]);
+      const b = series.get(numericHeaders[j]);
       if (state.correlationMethod !== 'spearman') {
         const result = pearsonCorrelation(a, b);
         if (result) {
@@ -964,6 +966,16 @@ async function decodeFile(file, encoding) {
   return { text: new TextDecoder(encoding).decode(buffer), encoding: labels[encoding] || encoding };
 }
 
+// 数据变更后的统一刷新：字段下拉 → 表格 → 控件显隐 → 保存 → 重算。
+// 仅提取调用序列完全一致的场景（导入 / 载入示例 / 重置），顺序与参数不变。
+function refreshAll() {
+  refreshSelectors();
+  renderEditor();
+  updateControls();
+  saveState();
+  analyze();
+}
+
 function applyImportedData(parsed, message) {
   const fatal = parsed.errors.find((error) => error.fatal);
   if (fatal) {
@@ -979,11 +991,7 @@ function applyImportedData(parsed, message) {
   selectedRow = null;
   selectedColumn = null;
   page = 0;
-  refreshSelectors();
-  renderEditor();
-  updateControls();
-  saveState();
-  analyze();
+  refreshAll();
   const nonFatal = parsed.errors.filter((error) => !error.fatal);
   let statusMsg = `${message}；识别分隔符：${parsed.delimiter === '\t' ? 'Tab' : parsed.delimiter}`;
   if (nonFatal.length) {
@@ -1169,11 +1177,7 @@ function loadExample(key) {
   page = 0;
   selectedRow = null;
   selectedColumn = null;
-  refreshSelectors();
-  renderEditor();
-  updateControls();
-  saveState();
-  analyze();
+  refreshAll();
   setEditorStatus(`已载入示例：${elements.exampleSelect.selectedOptions[0].textContent}`);
 }
 
@@ -1330,11 +1334,7 @@ function bindEvents() {
     selectedRow = null;
     selectedColumn = null;
     localStorage.removeItem(STORAGE_KEY);
-    refreshSelectors();
-    renderEditor();
-    updateControls();
-    saveState();
-    analyze();
+    refreshAll();
   });
 }
 
