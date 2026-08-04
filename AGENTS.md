@@ -12,11 +12,11 @@
 
 ## 仓库结构
 
-无配置文件（没有 `package.json`、`.gitignore` 等）：
+无 `package.json`，无构建步骤；有 `.gitignore`（忽略 `.claude/settings.local.json`）：
 
 - `index.html`（287 行）：全部页面结构，通过 `<script type="module" src="./src/app.mjs">` 加载入口。
 - `styles.css`（298 行）：全部样式。
-- `src/core.mjs`（911 行）：**纯函数统计核心**——描述统计、秩与相关、正态性/方差齐性/参数/非参数检验、事后比较与 `adjustPValues` 多重校正、精确枚举（`exactTwoSamplePermutation`、`fixedMarginExact`）、CSV 导出（`safeCsvCell` 防公式注入）。**不操作 DOM**，可直接被 Node.js 导入做回归测试。数字解析、概率分布与常量已拆分到 `src/parsing.mjs`、`src/distributions.mjs`、`src/constants.mjs`，本文件重导出以保持对外接口不变。
+- `src/core.mjs`（920 行）：**纯函数统计核心**——描述统计、秩与相关、正态性/方差齐性/参数/非参数检验、事后比较与 `adjustPValues` 多重校正、精确枚举（`exactTwoSamplePermutation`、`fixedMarginExact`）、CSV 导出（`safeCsvCell` 防公式注入）。**不操作 DOM**，可直接被 Node.js 导入做回归测试。数字解析、概率分布与常量已拆分到 `src/parsing.mjs`、`src/distributions.mjs`、`src/constants.mjs`，本文件重导出以保持对外接口不变。
 - `src/constants.mjs`：共享常量与基础工具——`ALPHA`、`MAX_IMPORT_ROWS`、`MAX_FILE_BYTES`、`clampProbability`。parsing / distributions 单向依赖它，避免模块间循环依赖；core.mjs 重导出保持对外接口不变。
 - `src/parsing.mjs`（293 行）：数字解析（`parseNumeric`）、分隔符检测（`detectDelimiter`）、CSV/TSV 解析（`parseDelimited`）、字段画像（`columnProfile`、`extractNumeric`）。自包含模块，通过 `core.mjs` 重导出。
 - `src/distributions.mjs`（202 行）：概率分布与数值积分——`logGamma`、`regularizedGammaQ`/`Beta`、`chiSquareSurvival`、`fSurvival`、`tTwoSidedP`、`erf`、`normalCdf`、`inverseNormalCdf`、`normalTwoSidedP`、学生化极差分布（`studentizedRangeCdf`）。纯数学，通过 `core.mjs` 重导出。
@@ -34,8 +34,8 @@
 没有构建流程。注意 **ES Modules 不能用 `file://` 直接打开**，必须起本地静态服务器：
 
 ```bash
-python -m http.server 8000
-# 然后访问 http://localhost:8000
+python -m http.server 8080
+# 然后访问 http://localhost:8080
 ```
 
 ## 测试与验证

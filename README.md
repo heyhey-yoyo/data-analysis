@@ -44,7 +44,7 @@
 
 部署根目录必须包含以下文件：
 
-```
+```text
 index.html
 styles.css
 src/
