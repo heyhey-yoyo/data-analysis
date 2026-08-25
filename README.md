@@ -109,3 +109,8 @@ node --check src/data/grouped-parser.mjs
 > - 新增/删除文件 → 更新两份文档中的文件清单
 > - 修改部署方式 → 同步更新本文部署章节
 > - 保持 **README 面向人类用户**，**AGENTS.md 面向 AI 代理**，两份文件不可互相替代
+
+
+## 项目标志
+
+浏览器标题栏使用统一系列的项目专属 `project-mark.svg`。页面中的 `YDchen Tools` 文字页眉保持原有结构、尺寸与样式，不使用项目标志替换。
