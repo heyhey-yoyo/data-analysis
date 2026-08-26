@@ -317,3 +317,6 @@ select:disabled {
 @media(max-width:768px){.main-grid{padding-inline:18px;margin-top:22px}}
 @media(max-width:480px){.main-grid{padding-inline:12px}.main-grid .card{padding:18px}}
 @media print{.main-grid{width:100%;padding:0;margin:0}.main-grid .card{padding:12px;border:1px solid #ccc;box-shadow:none}}
+
+/* The parser example should read as a quiet hint, not a competing blue accent. */
+.help-text code{background:#ebe4d8;color:#4f4b45;border:1px solid rgba(36,34,31,.16);font-size:.8125rem}
