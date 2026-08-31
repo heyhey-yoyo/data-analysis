@@ -2,11 +2,7 @@
 
 一个无需后端、无需构建步骤的纯静态网页统计分析工具。所有数据在浏览器本地计算，**不上传服务器**。
 
-## 界面风格
-
-工具主体采用 `ydchen-portfolio` 的米白、浅灰与赤陶色视觉系统，使用衬线标题和扁平化分析卡片；页眉仍保持原有 `YDchen Tools` 结构与样式。
-
-## 主要分析方法
+## 主要功能
 
 **描述统计**
 均值、标准差、中位数、四分位数、峰度、偏度、标准误差。
@@ -44,6 +40,20 @@
 - Fisher 精确检验与卡方检验
 - CSV/TSV 导入（自动检测分隔符，支持 UTF-8、GB18030/GBK、Big5 编码）
 
+## 界面风格
+
+工具主体采用 `ydchen-portfolio` 的米白、浅灰与赤陶色视觉系统，使用衬线标题和扁平化分析卡片；页眉仍保持原有 `YDchen Tools` 结构与样式。
+
+## 本地运行
+
+**请勿直接双击 `index.html`** — ES Modules 不支持 `file://` 协议。请使用静态服务器：
+
+```bash
+python3 -m http.server 8080
+```
+
+然后访问 `http://localhost:8080/`。
+
 ## 部署
 
 部署根目录必须包含以下文件：
@@ -66,31 +76,7 @@ _headers        # Cloudflare Pages 推荐
 
 直接发布目录根部即可。所有资源使用相对路径，支持子路径部署。
 
-## 本地运行
-
-**请勿直接双击 `index.html`** — ES Modules 不支持 `file://` 协议。请使用静态服务器：
-
-```bash
-python3 -m http.server 8080
-```
-
-然后访问 `http://localhost:8080/`。
-
-## 测试
-
-```bash
-node test/core.test.mjs               # 统计核心回归测试
-node test/grouped-parser.test.mjs     # 分组解析回归测试
-node --check src/core.mjs             # 语法检查
-node --check src/parsing.mjs
-node --check src/distributions.mjs
-node --check src/constants.mjs
-node --check src/app.mjs
-node --check src/worker.mjs
-node --check src/data/grouped-parser.mjs
-```
-
-## 范围与注意事项
+## 责任边界
 
 本工具用于探索、教学和快速核对，**不替代**针对复杂研究设计的专业统计建模。对于临床、监管、科研发表或高风险决策，必须使用成熟统计软件（SPSS、SAS、R、GraphPad Prism 等）独立复核。
 
@@ -109,8 +95,3 @@ node --check src/data/grouped-parser.mjs
 > - 新增/删除文件 → 更新两份文档中的文件清单
 > - 修改部署方式 → 同步更新本文部署章节
 > - 保持 **README 面向人类用户**，**AGENTS.md 面向 AI 代理**，两份文件不可互相替代
-
-
-## 项目标志
-
-浏览器标题栏使用统一系列的项目专属 `project-mark.svg`。页面中的 `YDchen Tools` 文字页眉保持原有结构、尺寸与样式，不使用项目标志替换。
