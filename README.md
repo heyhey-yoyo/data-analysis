@@ -44,12 +44,16 @@
 
 工具主体采用 `ydchen-portfolio` 的米白、浅灰与赤陶色视觉系统，使用衬线标题和扁平化分析卡片；页眉仍保持原有 `YDchen Tools` 结构与样式。
 
+## 数据与隐私
+
+所有计算在浏览器本地完成，数据不会上传到任何服务器。录入的数据与分析状态仅保存在你自己浏览器的 `localStorage` 中；清理浏览器网站数据或更换设备可能导致数据丢失，重要结果请及时导出 CSV 备份。
+
 ## 本地运行
 
 **请勿直接双击 `index.html`** — ES Modules 不支持 `file://` 协议。请使用静态服务器：
 
 ```bash
-python3 -m http.server 8080
+python -m http.server 8080
 ```
 
 然后访问 `http://localhost:8080/`。
@@ -79,6 +83,10 @@ _headers        # Cloudflare Pages 推荐
 ## 责任边界
 
 本工具用于探索、教学和快速核对，**不替代**针对复杂研究设计的专业统计建模。对于临床、监管、科研发表或高风险决策，必须使用成熟统计软件（SPSS、SAS、R、GraphPad Prism 等）独立复核。
+
+## License
+
+MIT
 
 ---
 

@@ -13,15 +13,15 @@
 ## 技术栈与运行架构
 
 - 无 `package.json`，无构建步骤；有 `.gitignore`（忽略 `.claude/settings.local.json`）。
-- `index.html`（287 行）：全部页面结构，通过 `<script type="module" src="./src/app.mjs">` 加载入口。
-- `styles.css`（298 行）：全部样式。
-- `src/core.mjs`（920 行）：**纯函数统计核心**——描述统计、秩与相关、正态性/方差齐性/参数/非参数检验、事后比较与 `adjustPValues` 多重校正、精确枚举（`exactTwoSamplePermutation`、`fixedMarginExact`）、CSV 导出（`safeCsvCell` 防公式注入）。**不操作 DOM**，可直接被 Node.js 导入做回归测试。数字解析、概率分布与常量位于 `src/parsing.mjs`、`src/distributions.mjs`、`src/constants.mjs`，本文件重导出以保持对外接口不变。
+- `index.html`：全部页面结构，通过 `<script type="module" src="./src/app.mjs">` 加载入口。
+- `styles.css`：全部样式。
+- `src/core.mjs`：**纯函数统计核心**——描述统计、秩与相关、正态性/方差齐性/参数/非参数检验、事后比较与 `adjustPValues` 多重校正、精确枚举（`exactTwoSamplePermutation`、`fixedMarginExact`）、CSV 导出（`safeCsvCell` 防公式注入）。**不操作 DOM**，可直接被 Node.js 导入做回归测试。数字解析、概率分布与常量位于 `src/parsing.mjs`、`src/distributions.mjs`、`src/constants.mjs`，本文件重导出以保持对外接口不变。
 - `src/constants.mjs`：共享常量与基础工具——`ALPHA`、`MAX_IMPORT_ROWS`、`MAX_FILE_BYTES`、`clampProbability`。parsing / distributions 单向依赖它，避免模块间循环依赖；core.mjs 重导出保持对外接口不变。
-- `src/parsing.mjs`（293 行）：数字解析（`parseNumeric`）、分隔符检测（`detectDelimiter`）、CSV/TSV 解析（`parseDelimited`）、字段画像（`columnProfile`、`extractNumeric`）。自包含模块，通过 `core.mjs` 重导出。
-- `src/distributions.mjs`（202 行）：概率分布与数值积分——`logGamma`、`regularizedGammaQ`/`Beta`、`chiSquareSurvival`、`fSurvival`、`tTwoSidedP`、`erf`、`normalCdf`、`inverseNormalCdf`、`normalTwoSidedP`、学生化极差分布（`studentizedRangeCdf`）。纯数学，通过 `core.mjs` 重导出。
-- `src/app.mjs`（1346 行）：UI、状态管理、导入导出、结果渲染。localStorage 键 `'basic-stat-tool-v7'`，并读取旧键 `'basic-stat-demo-v6'` 做迁移（迁移旧分析模式、`games/lsd/mann`、`postHocCorrection` 等枚举值）。
-- `src/worker.mjs`（18 行）：Web Worker，承接 `two-sample-permutation` 与 `fixed-margin-exact` 两种后台精确枚举任务。
-- `src/data/grouped-parser.mjs`（40 行）：分组文本解析 `tokenizeGroupBody`，处理 `组名: 1, 2, 3` 格式的数值拆分与歧义检测。
+- `src/parsing.mjs`：数字解析（`parseNumeric`）、分隔符检测（`detectDelimiter`）、CSV/TSV 解析（`parseDelimited`）、字段画像（`columnProfile`、`extractNumeric`）。自包含模块，通过 `core.mjs` 重导出。
+- `src/distributions.mjs`：概率分布与数值积分——`logGamma`、`regularizedGammaQ`/`Beta`、`chiSquareSurvival`、`fSurvival`、`tTwoSidedP`、`erf`、`normalCdf`、`inverseNormalCdf`、`normalTwoSidedP`、学生化极差分布（`studentizedRangeCdf`）。纯数学，通过 `core.mjs` 重导出。
+- `src/app.mjs`：UI、状态管理、导入导出、结果渲染。localStorage 键 `'basic-stat-tool-v7'`，并读取旧键 `'basic-stat-demo-v6'` 做迁移（迁移旧分析模式、`games/lsd/mann`、`postHocCorrection` 等枚举值）。
+- `src/worker.mjs`：Web Worker，承接 `two-sample-permutation` 与 `fixed-margin-exact` 两种后台精确枚举任务。
+- `src/data/grouped-parser.mjs`：分组文本解析 `tokenizeGroupBody`，处理 `组名: 1, 2, 3` 格式的数值拆分与歧义检测。
 - `_headers`：Cloudflare Pages 安全响应头（CSP 为 `default-src 'self'`、`connect-src 'none'` 等，注意不要引入与之冲突的远程资源或 inline 脚本）。
 - `FIXES.md`：修复矩阵与回归场景清单。
 - `test/core.test.mjs`：统计核心回归测试，`node test/core.test.mjs` 运行（无需部署）。
@@ -31,19 +31,22 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `index.html` | 页面结构（287 行），加载 `src/app.mjs` |
-| `styles.css` | 全部样式（298 行） |
-| `src/core.mjs` | 纯函数统计核心（920 行），不操作 DOM |
+| `index.html` | 页面结构，加载 `src/app.mjs` |
+| `styles.css` | 全部样式 |
+| `src/core.mjs` | 纯函数统计核心，不操作 DOM |
 | `src/constants.mjs` | 共享常量与基础工具 |
-| `src/parsing.mjs` | 数字解析与 CSV/TSV 解析（293 行） |
-| `src/distributions.mjs` | 概率分布与数值积分（202 行） |
-| `src/app.mjs` | UI、状态管理与导入导出（1346 行） |
+| `src/parsing.mjs` | 数字解析与 CSV/TSV 解析 |
+| `src/distributions.mjs` | 概率分布与数值积分 |
+| `src/app.mjs` | UI、状态管理与导入导出 |
 | `src/worker.mjs` | Web Worker 精确枚举 |
-| `src/data/grouped-parser.mjs` | 分组文本解析（40 行） |
+| `src/data/grouped-parser.mjs` | 分组文本解析 |
+| `assets/project-mark.svg` | 项目专属标志（用于 favicon） |
 | `_headers` | Cloudflare Pages 安全响应头 |
 | `FIXES.md` | v1→v2 修复矩阵与回归场景清单 |
 | `test/core.test.mjs` | 统计核心回归测试 |
 | `test/grouped-parser.test.mjs` | 分组文本解析回归测试 |
+| `LICENSE` | MIT 许可证 |
+| `.gitignore` | Git 忽略规则 |
 
 ## 运行与构建
 
@@ -84,7 +87,7 @@ python -m http.server 8080
 
 ## 标志维护约定
 
-`YDchen Tools` 文字页眉是受保护的品牌区域，必须保持原结构、尺寸与样式；项目专属统一标志仅用于 favicon 或现有非页眉标志，不得改变页面布局。
+`YDchen Tools` 文字页眉是受保护的品牌区域，必须保持原结构、尺寸与样式；项目专属统一标志 `assets/project-mark.svg` 仅用于 favicon 或现有非页眉标志，不得改变页面布局。
 
 ---
 
@@ -94,5 +97,5 @@ python -m http.server 8080
 >
 > - **修改代码后必须同步更新本 AGENTS.md 与 README.md** — 新增文件、架构变更、功能增删、部署方式变更都需要在两份文档中体现
 > - README.md 面向**人类用户**（功能介绍、运行方法、部署步骤），AGENTS.md 面向 **AI 代理**（架构、代码组织、测试策略、开发约定）
-> - 两份文件**不可互相替代**，各有所众
+> - 两份文件**不可互相替代**，各有所长
 > - 项目的实际文件结构必须与 AGENTS.md 中列出的文件清单保持一致

@@ -6,9 +6,9 @@
   --text: #1e293b;
   --muted: #64748b;
   --line: #e4e4e7;
-  --primary: #0d9488;
-  --primary-hover: #0f766e;
-  --primary-soft: #f0fdfa;
+  --primary: #c15f3c;
+  --primary-hover: #a94f31;
+  --primary-soft: #f0ded4;
   --success: #047857;
   --success-soft: #ecfdf5;
   --warning: #b45309;
@@ -46,7 +46,7 @@ code { padding: 1px 5px; border-radius: 5px; background: #eef2f7; color: #475569
 .header-inner { display: flex; align-items: center; gap: 16px; }
 .header-brand { display: flex; align-items: baseline; flex-shrink: 0; line-height: 1; }
 .brand-bold { font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; font-size: 1.25rem; font-weight: 600; color: #0f172a; letter-spacing: -.025em; }
-.brand-light { font-size: 1.25rem; font-weight: 300; color: #94a3b8; margin-left: .375rem; }
+.brand-light { font-size: 1.25rem; font-weight: 300; color: #6f6a62; margin-left: .375rem; }
 .header-divider { width: 1px; height: 36px; background: rgba(203,213,225,.8); flex-shrink: 0; }
 .header-info { min-width: 0; }
 h1 { margin: 0; font-size: 1.125rem; line-height: 1.25; font-weight: 600; color: #1e293b; }
@@ -74,7 +74,7 @@ input, select {
   background: var(--surface); color: var(--text); padding: 5px 12px;
   outline: none; transition: border-color .2s, box-shadow .2s;
 }
-input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(13,148,136,.15); }
+input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(193,95,60,.16); }
 .mode-description { margin: 0 0 14px; color: var(--muted); font-size: .875rem; }
 .button-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .button { min-height: 34px; border-radius: 8px; padding: 5px 12px; border: 1px solid transparent; font-size: .875rem; font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; }
@@ -111,7 +111,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .alert.error { background: var(--danger-soft); color: var(--danger); }
 .alert.success { background: var(--success-soft); color: var(--success); }
 .hidden { display: none !important; }
-.site-footer { padding: 24px 0 calc(24px + env(safe-area-inset-bottom, 0)); color: #94a3b8; text-align: center; font-size: .75rem; }
+.site-footer { padding: 24px 0 calc(24px + env(safe-area-inset-bottom, 0)); color: var(--muted); text-align: center; font-size: .75rem; }
 
 /* 结果区（v7 结构，v6 外观） */
 .result-block { margin-top: 18px; }
@@ -192,7 +192,7 @@ tbody tr:last-child td { border-bottom: 0; }
   left: 0;
   z-index: 2;
   text-align: center;
-  color: #94a3b8;
+  color: #6f6a62;
   background: #f8fafc;
   font-variant-numeric: tabular-nums;
   user-select: none;
