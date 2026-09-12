@@ -80,12 +80,21 @@ let currentWorker = null;
 let currentWorkerReject = null;
 let currentWorkerTaskId = 0;
 
+function setHeavyTaskBusy(busy) {
+  // 只锁住重复提交入口；用户仍可更改分析选项或重置以取消旧任务。
+  for (const key of ['loadExampleBtn', 'parseTableBtn', 'parseGroupsBtn']) {
+    elements[key].disabled = busy;
+  }
+  elements.mainResultSection.setAttribute('aria-busy', String(busy));
+}
+
 function cancelCurrentHeavyTask() {
   if (!currentWorker) return;
   const oldReject = currentWorkerReject;
   currentWorker.terminate();
   currentWorker = null;
   currentWorkerReject = null;
+  setHeavyTaskBusy(false);
   if (oldReject) {
     oldReject(new DOMException('任务已取消', 'AbortError'));
   }
@@ -106,19 +115,20 @@ function runHeavyTask(task, payload) {
 
     currentWorker = worker;
     currentWorkerReject = reject;
+    setHeavyTaskBusy(true);
     const id = ++currentWorkerTaskId;
 
     worker.addEventListener('message', (event) => {
       if (event.data?.id !== id) return;
       worker.terminate();
-      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
+      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; setHeavyTaskBusy(false); }
       if (event.data.ok) resolve(event.data.result);
       else reject(new Error(event.data.error || 'Worker 计算失败'));
     });
 
     worker.addEventListener('error', () => {
       worker.terminate();
-      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
+      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; setHeavyTaskBusy(false); }
       reject(new Error('Worker 不可用'));
     });
 
@@ -126,7 +136,7 @@ function runHeavyTask(task, payload) {
       worker.postMessage({ id, task, payload });
     } catch (e) {
       worker.terminate();
-      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; }
+      if (currentWorker === worker) { currentWorker = null; currentWorkerReject = null; setHeavyTaskBusy(false); }
       reject(new Error('Worker 通信失败'));
     }
   });
@@ -218,26 +228,45 @@ function makeCell(text, className = '') {
 }
 
 function pCell(value) {
-  return makeCell(formatP(value), Number.isFinite(value) && value < ALPHA ? 'significant' : 'not-significant');
+  const significant = Number.isFinite(value) && value < ALPHA;
+  return makeCell(formatP(value), significant ? 'significant p-sig' : 'not-significant');
 }
+
+// 判定数值样式单元格（含 < 0.0001、科学计数法、负数等），缺失占位「—」视为中性
+const NUMERIC_CELL_RE = /^[-+<>≤≥]?\s*(?:\d|\.\d)/;
 
 function renderTable(headElement, bodyElement, headers, rows) {
   headElement.replaceChildren();
   bodyElement.replaceChildren();
+  // 数值列右对齐：整列除「—」外均为数值样式时判定为数值列
+  const numericCols = headers.map((_, colIndex) => {
+    let sawNumeric = false;
+    for (const row of rows) {
+      const text = String(flattenCell(row[colIndex]) ?? '').trim();
+      if (!text || text === '—') continue;
+      if (!NUMERIC_CELL_RE.test(text)) return false;
+      sawNumeric = true;
+    }
+    return sawNumeric;
+  });
   const headRow = document.createElement('tr');
-  headers.forEach((header) => {
+  headers.forEach((header, colIndex) => {
     const th = document.createElement('th');
     th.textContent = header;
+    if (numericCols[colIndex]) th.className = 'num';
     headRow.appendChild(th);
   });
   headElement.appendChild(headRow);
   rows.forEach((row) => {
     const tr = document.createElement('tr');
-    row.forEach((rawCell) => {
+    row.forEach((rawCell, colIndex) => {
       const cell = flattenCell(rawCell);
       const td = document.createElement('td');
       td.textContent = String(cell ?? '');
-      if (rawCell && typeof rawCell === 'object' && rawCell.className) td.className = rawCell.className;
+      const classes = [];
+      if (rawCell && typeof rawCell === 'object' && rawCell.className) classes.push(rawCell.className);
+      if (numericCols[colIndex]) classes.push('num');
+      if (classes.length) td.className = classes.join(' ');
       tr.appendChild(td);
     });
     bodyElement.appendChild(tr);
@@ -782,7 +811,7 @@ async function analyzeCategorical(currentProfiles, version) {
   ]);
   setMainResult('分类变量关联检验', '固定边际精确枚举正在后台计算。', ['方法', '统计量', 'df', 'P', '效应 / 状态'], [
     ['Pearson χ²', formatNumber(summary.statistic), summary.df, pCell(summary.pValue), `Cramér V = ${formatNumber(summary.cramerV)}`],
-    ['固定边际精确 P', '—', '—', '计算中…', 'Web Worker'],
+    ['固定边际精确 P', '—', '—', makeCell('计算中…', 'computing'), 'Web Worker'],
   ]);
   const contingencyRows = built.rowLabels.map((label, rowIndex) => [label, ...built.counts[rowIndex], summary.rowTotals[rowIndex]]);
   contingencyRows.push(['合计', ...summary.columnTotals, summary.total]);
@@ -847,7 +876,7 @@ async function analyzeTwoGroup(currentProfiles, version) {
     ['Welch t（推荐）', formatNumber(welch.statistic), formatNumber(welch.df), pCell(welch.pValue), '—', '不要求方差相等'],
     ['等方差 t', formatNumber(pooled.statistic), formatNumber(pooled.df), pCell(pooled.pValue), `Cohen d = ${formatNumber(pooled.effect)}`, '参数法'],
     ['Mann–Whitney U' + (mw.pValueType === 'exact' ? '（精确 P）' : '（渐近 P）'), `${formatNumber(mw.statistic)}（Z=${formatNumber(mw.z)}）`, '—', pCell(mw.pValue), `秩二列相关 = ${formatNumber(mw.effect)}`, 'U=均值时连续性校正为 0'],
-    ['均值差标签置换', '—', '—', '计算中…', '—', '交换性假设下精确'],
+    ['均值差标签置换', '—', '—', makeCell('计算中…', 'computing'), '—', '交换性假设下精确'],
   ];
   setMainResult('两独立样本检验', '标签置换检验正在后台计算；它仅在两组分布相同、标签可交换的原假设下精确。推断分析始终剔除缺失和非法格式。', ['方法', '统计量', 'df', 'P', '效应量', '说明'], rows);
   const descriptiveRows = built.labels.map((label, index) => {
@@ -1192,7 +1221,8 @@ function exportLatest() {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  // 延迟回收：click() 后立即 revoke 在 Firefox 下可能取消下载
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function copyLatest() {

@@ -125,6 +125,20 @@ tbody tr:last-child td { border-bottom: 0; }
 .summary-card strong { display: block; margin-top: 2px; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
 .significant { color: var(--success); font-weight: 700; font-variant-numeric: tabular-nums; }
 .not-significant { font-variant-numeric: tabular-nums; }
+/* 显著 P 值追加 * 符号，兼顾色盲用户（不依赖颜色辨识） */
+.p-sig::after { content: ' *'; }
+/* 数值列右对齐（renderTable 按列内容自动判定并加 .num） */
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Worker 后台计算中的加载动画（纯 CSS spinner） */
+.computing { color: var(--muted); }
+.computing::before {
+  content: ''; display: inline-block; width: .8em; height: .8em; margin-right: 6px;
+  vertical-align: -1px; border: 2px solid var(--primary-soft); border-top-color: var(--primary);
+  border-radius: 50%; animation: da-spin .8s linear infinite;
+}
+@keyframes da-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .computing::before { animation: none; } }
+.button:disabled { opacity: .55; cursor: not-allowed; }
 
 /* 编辑器（v7 结构，v6 外观） */
 .editor-toolbar {
