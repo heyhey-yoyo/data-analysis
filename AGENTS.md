@@ -74,12 +74,14 @@ node --check src/app.mjs
 
 ## 代码组织与风格约定
 
+对外版本以 GitHub Release 为准；项目没有独立的应用版本常量，发布不更改本地存储格式。
+
 - `core.mjs` 纯函数优先，**统计函数不直接操作 DOM**；`app.mjs` 才读写 DOM。
 - 2 空格缩进，单引号字符串，`const` 优先。
 - 渲染一律使用 `textContent` / `createElement`，**不用 `innerHTML` 拼接用户数据**（当前代码中已无此用法，保持这一约定）。
-- 导入限制：`MAX_FILE_BYTES = 10 MiB`、`MAX_IMPORT_ROWS = 100000`，大表格分页显示；超限要给出明确错误而不是静默截断。
-- 解析语义：区分 `number / missing / invalid` 三类；支持小数逗号；CSV 解析 quote-aware，未闭合引号返回 fatal error。
-- 数值无法计算时返回 `null` 并显示 `—`，不要抛异常；精确枚举超限要明确报告（`too-many-combinations / timeout / numerical-failure`），不伪装为精确结果。
+- 导入限制：`MAX_FILE_BYTES = 10 MiB`、`MAX_IMPORT_ROWS = 100000`，大表格分页显示；超限要给出明确错误而不是静默截断；按 `header` 选项扣除表头后计数，无表头 100001 行也返回 fatal `TOO_MANY_ROWS`。
+- 解析语义：区分 `number / missing / invalid` 三类；支持小数逗号；CSV 解析 quote-aware，未闭合引号返回 fatal error。`detectDelimiter` 比较前 30 条逻辑记录中候选分隔符的覆盖率和列数一致性，不以分隔符数量多作为优先依据；同分按 Tab / 分号 / 逗号排序，防止小数逗号抢占分号/TSV。引号内换行与分隔符不参与结构计数；空字段和不齐行仍按原规则保留/补空。`test/core.test.mjs` 覆盖有/无表头、CRLF、单列、引号及不齐行边界。
+- 数值无法计算时返回 `null` 并显示 `—`，不要抛异常；精确枚举超限要明确报告（`too-many-combinations`（两样本置换）、`too-many-tables`（固定边际表）、`timeout` 或 `enumeration-failed`），不伪装为精确结果。
 - 中文全角/半角标点沿用现有习惯。
 
 ### 品牌与排版
@@ -103,7 +105,7 @@ runHeavyTask 统一管理 aria-busy 和三个提交按钮；完成、异常、�
 ## 安全与数据注意事项
 
 - **所有计算在浏览器本地完成，数据不上传**——这是产品的核心承诺（CSP 中 `connect-src 'none'` 强制保证），不要引入任何网络请求、分析 SDK 或远程资源。
-- CSV 导出走 `safeCsvCell()`：危险前缀（`=`、`+`、`-`、`@` 等）单元格前置单引号，防公式注入。
+- CSV 导出只包含 `latestResult` 的当前主结果表，不包含输入表及次级结果，也不是分析状态备份。CSV 导出走 `safeCsvCell()`：危险前缀（`=`、`+`、`-`、`@` 等）单元格前置单引号，防公式注入。
 - localStorage 仅保存用户自己的数据，有大小阈值与异常捕获，失败时在界面告警。
 - 上传文件用 `TextDecoder` 解码，支持 UTF-8、GB18030、Big5，避免中文乱码。
 

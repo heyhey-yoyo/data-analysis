@@ -144,7 +144,9 @@ export function detectDelimiter(text) {
     });
     const coverage = positive.length / records.length;
     const consistency = modeFrequency / positive.length;
-    return { delimiter, mode, score: mode * 100 + coverage * 20 + consistency * 10 };
+    // 先看逻辑记录覆盖率与列结构一致性，不能让小数逗号因数量更多压过真正的分隔符。
+    // 同分沿用 Tab → 分号 → 逗号优先序，支持无表头的分号/TSV 小数逗号数据。
+    return { delimiter, mode, score: coverage * 1000 + consistency * 100 };
   });
   scored.sort((a, b) => b.score - a.score || candidates.indexOf(a.delimiter) - candidates.indexOf(b.delimiter));
   return scored[0].score > 0 ? scored[0].delimiter : ',';
@@ -216,17 +218,18 @@ export function parseDelimited(text, options = {}) {
   pushRow();
 
   if (!parsedRows.length) return { headers: [], rows: [], delimiter, errors };
-  if (parsedRows.length > MAX_IMPORT_ROWS + 1) {
+  const dataRowCount = parsedRows.length - (options.header === false ? 0 : 1);
+  if (dataRowCount > MAX_IMPORT_ROWS) {
     errors.push({ code: 'TOO_MANY_ROWS', fatal: true, message: `最多支持 ${MAX_IMPORT_ROWS.toLocaleString()} 行数据` });
   }
 
   if (options.header === false) {
-    const width = Math.max(...parsedRows.map((item) => item.length));
+    const width = parsedRows.reduce((maximum, item) => Math.max(maximum, item.length), 0);
     const rows = parsedRows.slice(0, MAX_IMPORT_ROWS).map((item) => Array.from({ length: width }, (_, index) => item[index] ?? ''));
     return { headers: [], rows, delimiter, errors };
   }
 
-  const width = Math.max(...parsedRows.map((item) => item.length));
+  const width = parsedRows.reduce((maximum, item) => Math.max(maximum, item.length), 0);
   const rawHeaders = parsedRows[0];
   const headers = [];
   for (let index = 0; index < width; index += 1) {

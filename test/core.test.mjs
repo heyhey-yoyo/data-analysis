@@ -14,6 +14,8 @@ import {
   spearmanCorrelation,
   shapiroFamily,
   stats,
+  parseDelimited,
+  MAX_IMPORT_ROWS,
 } from '../src/core.mjs';
 
 let passed = 0;
@@ -232,6 +234,47 @@ test('B2-1 Mann-Whitney n=2 vs n=2 精确 P', () => {
 test('B2-1 Mann-Whitney 有 ties 时回退渐近', () => {
   const result = mannWhitney([1, 2], [2, 3]);
   assert.equal(result.pValueType, 'asymptotic');
+});
+
+// CSV 数据行上限与表头语义一致，不允许无表头多一行静默通过。
+for (const header of [true, false]) {
+  for (const count of [MAX_IMPORT_ROWS, MAX_IMPORT_ROWS + 1]) {
+    test('CSV 行上限 header=' + header + ' count=' + count, () => {
+      const data = (header ? 'value\n' : '') + Array(count).fill('1').join('\n');
+      const parsed = parseDelimited(data, { header, delimiter: ',' });
+      assert.equal(parsed.rows.length, MAX_IMPORT_ROWS);
+      assert.equal(parsed.errors.some(error => error.code === 'TOO_MANY_ROWS' && error.fatal), count > MAX_IMPORT_ROWS);
+    });
+  }
+}
+
+// 自动分隔符应服从跨记录结构，不能让小数逗号把真实列拆开。
+for (const delimiter of [';', '\t']) {
+  for (const header of [true, false]) {
+    test('小数逗号与真实分隔符 ' + JSON.stringify(delimiter) + ' header=' + header, () => {
+      const text = (header ? 'a' + delimiter + 'b\r\n' : '') + '1,5' + delimiter + '2,5\r\n3,5' + delimiter + '4,5';
+      const result = parseDelimited(text, { header });
+      assert.equal(result.delimiter, delimiter);
+      assert.deepEqual(result.rows, [['1,5','2,5'],['3,5','4,5']]);
+      assert.deepEqual(result.errors, []);
+    });
+  }
+}
+test('普通数字 CSV 不因逗号相邻数字误识别为小数', () => {
+  assert.deepEqual(parseDelimited('a,b\r\n1,2\r\n3,4\r\n').rows, [['1','2'],['3','4']]);
+  assert.deepEqual(parseDelimited('1,2\n3,4', {header:false}).rows, [['1','2'],['3','4']]);
+});
+test('引号内分隔符和跨行文本不参与自动分列', () => {
+  const result = parseDelimited('name;value\r\n"alpha,beta\r\ngamma;delta";1,5');
+  assert.equal(result.delimiter, ';');
+  assert.deepEqual(result.rows, [['alpha,beta\r\ngamma;delta','1,5']]);
+  assert.equal(parseDelimited('name,value\n"semi;colon;and,comma",2').delimiter, ',');
+});
+test('单列、空字段、末尾空行及不齐行保留解析语义', () => {
+  assert.deepEqual(parseDelimited('value\r\n1\r\n2\r\n').rows, [['1'],['2']]);
+  assert.deepEqual(parseDelimited('a;b;c\n1;;3\n4;5\n6;7;8;9').rows, [['1','','3',''],['4','5','',''],['6','7','8','9']]);
+  assert.deepEqual(parseDelimited('a,b,c\n1,,3\n4,5\n6,7,8,9').rows, [['1','','3',''],['4','5','',''],['6','7','8','9']]);
+  assert(parseDelimited('a;b\n"missing;1,5').errors.some(e=>e.code === 'UNCLOSED_QUOTE' && e.fatal));
 });
 
 // ---------- 汇总 ----------
