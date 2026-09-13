@@ -104,6 +104,8 @@ runHeavyTask 统一管理 aria-busy 和三个提交按钮；完成、异常、�
 
 静态托管，目标平台 Cloudflare Pages：Framework preset 选 `None`、Build command 留空、输出目录 `/`（仓库根目录）。部署根目录必须包含 `index.html`、`styles.css`、`src/`、`_headers`（后两个对 Pages 分别必需和推荐）。所有资源相对路径，支持子路径部署，也可直接发布到 GitHub Pages 等任意静态服务器。
 
+平台或域名缓存规则可能覆盖项目请求的 `no-cache` 响应头；不能仅凭 `_headers` 宣称线上全部资源会重新验证。资源标识仍须覆盖完整依赖闭包并随内容更新，实际缓存响应头在上线记录中逐资源保留。
+
 ## 安全与数据注意事项
 
 - **所有计算在浏览器本地完成，数据不上传**——这是产品的核心承诺（CSP 中 `connect-src 'none'` 强制保证），不要引入任何网络请求、分析 SDK 或远程资源。
