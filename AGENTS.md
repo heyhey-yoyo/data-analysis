@@ -1,10 +1,10 @@
-# 基础统计分析工具 v2 — 项目说明（供 AI 编程代理阅读）
+# 基础统计分析工具 — 项目说明（供 AI 编程代理阅读）
 
 面向 AI 编程代理的项目说明。阅读本文件即可了解项目全貌，无需额外背景知识。
 
 ## 项目概览
 
-**基础统计分析工具 v2**——纯前端、浏览器本地计算的网页版统计分析工具。无后端、无构建步骤、无任何第三方依赖。v2 从 v1 的单文件结构重构为 ES Modules：统计核心（`src/core.mjs`）与 UI（`src/app.mjs`）分离，精确枚举计算放到 Web Worker（`src/worker.mjs`）。相对 v1 的修复清单见 `FIXES.md`（含 Mann–Whitney 连续性校正、CSV 解析、公式注入防护、文件大小限制等 18 项）。
+**基础统计分析工具**——纯前端、浏览器本地计算的网页版统计分析工具。无后端、无构建步骤、无任何第三方依赖。当前结构为 ES Modules：统计核心（`src/core.mjs`）与 UI（`src/app.mjs`）分离，精确枚举计算放到 Web Worker（`src/worker.mjs`）。回归场景见 `FIXES.md`，涵盖 Mann–Whitney 连续性校正、CSV 解析、公式注入防护和文件大小限制。
 
 页面流程：选择分析 → 录入数据（CSV 上传 / 粘贴 / 内置示例）→ 查看结果。工具主体采用 `ydchen-portfolio` 的米白 / 浅灰 / 赤陶色（`#a94f31`）视觉系统；`YDchen Tools` 页眉遵循本文件的工具类基准。
 
@@ -42,7 +42,7 @@
 | `src/data/grouped-parser.mjs` | 分组文本解析 |
 | `assets/project-mark.svg` | 项目专属标志（用于 favicon） |
 | `_headers` | Cloudflare Pages 安全响应头 |
-| `FIXES.md` | v1→v2 修复矩阵与回归场景清单 |
+| `FIXES.md` | 修复矩阵与回归场景清单 |
 | `test/core.test.mjs` | 统计核心回归测试 |
 | `test/grouped-parser.test.mjs` | 分组文本解析回归测试 |
 | `LICENSE` | MIT 许可证 |
@@ -76,7 +76,7 @@ node --check src/app.mjs
 
 - `core.mjs` 纯函数优先，**统计函数不直接操作 DOM**；`app.mjs` 才读写 DOM。
 - 2 空格缩进，单引号字符串，`const` 优先。
-- 渲染一律使用 `textContent` / `createElement`，**不用 `innerHTML` 拼接用户数据**（v2 中已无 innerHTML 用法，保持这一约定）。
+- 渲染一律使用 `textContent` / `createElement`，**不用 `innerHTML` 拼接用户数据**（当前代码中已无此用法，保持这一约定）。
 - 导入限制：`MAX_FILE_BYTES = 10 MiB`、`MAX_IMPORT_ROWS = 100000`，大表格分页显示；超限要给出明确错误而不是静默截断。
 - 解析语义：区分 `number / missing / invalid` 三类；支持小数逗号；CSV 解析 quote-aware，未闭合引号返回 fatal error。
 - 数值无法计算时返回 `null` 并显示 `—`，不要抛异常；精确枚举超限要明确报告（`too-many-combinations / timeout / numerical-failure`），不伪装为精确结果。
@@ -111,11 +111,13 @@ runHeavyTask 统一管理 aria-busy 和三个提交按钮；完成、异常、�
 
 `YDchen Tools` 文字页眉是受保护的品牌区域，必须保持原结构、尺寸与样式；项目专属统一标志 `assets/project-mark.svg` 仅用于 favicon 或现有非页眉标志，不得改变页面布局。
 
+---
+
 ## AI 维护提醒
 
 > **⚠️ 任何修改此项目的 AI 代理（包括未来的你自己）都必须遵守：**
 >
-> - **修改代码后必须同步更新本 AGENTS.md 与 README.md** — 新增文件、架构变更、功能增删、部署方式变更都需要在两份文档中体现
-> - README.md 面向**人类用户**（功能介绍、运行方法、部署步骤），AGENTS.md 面向 **AI 代理**（架构、代码组织、测试策略、开发约定）
+> - **修改代码后必须同步更新本 AGENTS.md 与 [README.md](./README.md)** — 新增文件、架构变更、功能增删、部署方式变更都需要在两份文档中体现
+> - [README.md](./README.md) 面向**人类用户**（功能介绍、运行方法、部署步骤），AGENTS.md 面向 **AI 代理**（架构、代码组织、测试策略、开发约定）
 > - 两份文件**不可互相替代**，各有所长
 > - 项目的实际文件结构必须与 AGENTS.md 中列出的文件清单保持一致
