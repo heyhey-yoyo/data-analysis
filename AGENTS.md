@@ -100,6 +100,8 @@ runHeavyTask 统一管理 aria-busy 和三个提交按钮；完成、异常、�
 
 ## 部署
 
+缓存升级约定：`_headers` 对所有资源设置 `Cache-Control: no-cache`。HTML 入口、样式、各层本地模块引用及 Worker 地址使用一致的 `v` 查询标识，不能只更新入口脚本。更新资源时刷新整组标识，并通过实际导入图核对每条本地依赖及 Worker 的 URL；标识独立于模型、存储和分享格式版本。发布后需以实际响应头和递归资源摘要核验，避免已有缓存混用。
+
 静态托管，目标平台 Cloudflare Pages：Framework preset 选 `None`、Build command 留空、输出目录 `/`（仓库根目录）。部署根目录必须包含 `index.html`、`styles.css`、`src/`、`_headers`（后两个对 Pages 分别必需和推荐）。所有资源相对路径，支持子路径部署，也可直接发布到 GitHub Pages 等任意静态服务器。
 
 ## 安全与数据注意事项

@@ -1,4 +1,4 @@
-import { exactTwoSamplePermutation, fixedMarginExact } from './core.mjs';
+import { exactTwoSamplePermutation, fixedMarginExact } from './core.mjs?v=04e41b9d8bf0';
 
 self.addEventListener('message', (event) => {
   const { id, task, payload } = event.data || {};

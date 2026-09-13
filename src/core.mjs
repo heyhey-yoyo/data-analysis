@@ -3,20 +3,20 @@
 // 此处重导出以保持对外接口不变。
 
 // ---- 重导出子模块与常量（保持对 app.mjs / worker.mjs / 测试的接口不变） ----
-export { parseNumeric, detectDelimiter, parseDelimited, columnProfile, extractNumeric } from './parsing.mjs';
-export { ALPHA, MAX_IMPORT_ROWS, MAX_FILE_BYTES, clampProbability } from './constants.mjs';
+export { parseNumeric, detectDelimiter, parseDelimited, columnProfile, extractNumeric } from './parsing.mjs?v=04e41b9d8bf0';
+export { ALPHA, MAX_IMPORT_ROWS, MAX_FILE_BYTES, clampProbability } from './constants.mjs?v=04e41b9d8bf0';
 import {
   logGamma, chiSquareSurvival, fSurvival, tTwoSidedP,
   normalCdf, inverseNormalCdf, normalTwoSidedP,
   studentizedRangeCdf, regularizedGammaQ, regularizedBeta, erf,
-} from './distributions.mjs';
+} from './distributions.mjs?v=04e41b9d8bf0';
 export {
   logGamma, regularizedGammaQ, regularizedBeta,
   chiSquareSurvival, fSurvival, tTwoSidedP,
   erf, normalCdf, inverseNormalCdf, normalTwoSidedP,
   studentizedRangeCdf,
-} from './distributions.mjs';
-import { ALPHA, MAX_IMPORT_ROWS, MAX_FILE_BYTES, clampProbability } from './constants.mjs';
+} from './distributions.mjs?v=04e41b9d8bf0';
+import { ALPHA, MAX_IMPORT_ROWS, MAX_FILE_BYTES, clampProbability } from './constants.mjs?v=04e41b9d8bf0';
 
 // Neumaier 补偿求和：比 Kahan 对大值更稳定
 function neumaierSum(values) {

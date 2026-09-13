@@ -18,8 +18,8 @@ import {
   postHocComparisons,
   contingencyStatistics,
   toCsv,
-} from './core.mjs';
-import { tokenizeGroupBody } from './data/grouped-parser.mjs';
+} from './core.mjs?v=04e41b9d8bf0';
+import { tokenizeGroupBody } from './data/grouped-parser.mjs?v=04e41b9d8bf0';
 
 const STORAGE_KEY = 'basic-stat-tool-v7';
 const LEGACY_STORAGE_KEY = 'basic-stat-demo-v6';
@@ -107,7 +107,7 @@ function runHeavyTask(task, payload) {
   return new Promise((resolve, reject) => {
     let worker = null;
     try {
-      worker = new Worker(new URL('./worker.mjs', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./worker.mjs?v=04e41b9d8bf0', import.meta.url), { type: 'module' });
     } catch (e) {
       reject(new Error('Worker 创建失败'));
       return;

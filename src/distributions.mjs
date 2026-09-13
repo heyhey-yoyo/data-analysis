@@ -1,5 +1,5 @@
 // 概率分布函数与数值积分 —— 纯数学，不操作 DOM。
-import { clampProbability } from './constants.mjs';
+import { clampProbability } from './constants.mjs?v=04e41b9d8bf0';
 
 export function logGamma(value) {
   const coefficients = [
