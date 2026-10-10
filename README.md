@@ -81,6 +81,8 @@ _headers        # Cloudflare Pages 推荐
 
 **Cloudflare Pages**
 
+实际部署于 Pages 项目 `tools-data-analysis`（注意：Cloudflare 项目名与仓库名不同），已接入 Git 集成，推送 `main` 分支自动构建部署。首次接入配置：
+
 1. 将仓库内容上传或提交到 Git。
 2. Framework preset 选择 `None`。
 3. Build command 留空。

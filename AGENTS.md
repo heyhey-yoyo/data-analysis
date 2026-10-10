@@ -47,6 +47,7 @@
 | `test/grouped-parser.test.mjs` | 分组文本解析回归测试 |
 | `LICENSE` | MIT 许可证 |
 | `.gitignore` | Git 忽略规则 |
+| `README.md` / `AGENTS.md` | 用户向项目说明与 AI 代理维护说明 |
 
 ## 运行与构建
 
@@ -90,7 +91,7 @@ node --check src/app.mjs
 
 页眉背景和底部分隔线横跨页面可用宽度，内容区最大宽度 1280px（含两侧各 16px 内边距），整体居中；品牌和标题靠左，操作区靠右，窄屏换行后仍保持该对齐。品牌页眉在文档顶部正常排布，随页面滚走，不固定或吸顶；表格内部表头、侧边工具和手机底部导航可按功能保留。
 
-正文采用统一系统无衬线字体，默认 16px / 1.6；标题采用 Georgia、Times New Roman、Songti SC、STSong 衬线族。数字与代码可使用 SFMono-Regular、Consolas、Liberation Mono、Microsoft YaHei 等宽族。按钮和输入通常 15px，辅助文字 12–14px，密集科学数据允许有理由的局部调整。页面底色 #f3eee5、正文 #24221f、赤陶强调 #a94f31，柔和底色上的强调文字 #823a25；科学分类色、热图、作品主题与状态色保留必要区分度。
+正文采用统一系统无衬线字体，默认 16px / 1.6；标题采用 Georgia、Times New Roman、Songti SC、STSong 衬线族。数字与代码可使用 SFMono-Regular、Consolas、Liberation Mono、Microsoft YaHei 等宽族。按钮和输入通常 15px，辅助文字 12–14px，密集科学数据允许有理由的局部调整。页面底色 #f3eee5、正文 #24221f、赤陶强调 #a94f31；科学分类色、热图、作品主题与状态色保留必要区分度。
 
 主样式保留一个顶层 `:root`，条件规则和深色画布局部令牌独立维护，避免叠加重复主题或末尾覆盖层。修改视觉后核对实际渲染字体、字号、间距、对比度和操作可达性；至少检查 1440、820、390px，涉及断点时补查两侧宽度，涉及画布或存储时补查交互。构建、单测、本地浏览器和线上部署分别记录；发布后禁用缓存/硬刷新，并核对实际资源版本。
 
@@ -102,7 +103,7 @@ runHeavyTask 统一管理 aria-busy 和三个提交按钮；完成、异常、�
 
 缓存升级约定：`_headers` 对所有资源设置 `Cache-Control: no-cache`。HTML 入口、样式、各层本地模块引用及 Worker 地址使用一致的 `v` 查询标识，不能只更新入口脚本。更新资源时刷新整组标识，并通过实际导入图核对每条本地依赖及 Worker 的 URL；标识独立于模型、存储和分享格式版本。发布后需以实际响应头和递归资源摘要核验，避免已有缓存混用。
 
-静态托管，目标平台 Cloudflare Pages：Framework preset 选 `None`、Build command 留空、输出目录 `/`（仓库根目录）。部署根目录必须包含 `index.html`、`styles.css`、`src/`、`_headers`（后两个对 Pages 分别必需和推荐）。所有资源相对路径，支持子路径部署，也可直接发布到 GitHub Pages 等任意静态服务器。
+静态托管，目标平台 Cloudflare Pages：实际项目名 `tools-data-analysis`（与仓库名不同），已接入 Git 集成，推送 `main` 分支自动构建部署；Framework preset 选 `None`、Build command 留空、输出目录 `/`（仓库根目录）。部署根目录必须包含 `index.html`、`styles.css`、`src/`、`_headers`（后两个对 Pages 分别必需和推荐）。所有资源相对路径，支持子路径部署，也可直接发布到 GitHub Pages 等任意静态服务器。
 
 平台或域名缓存规则可能覆盖项目请求的 `no-cache` 响应头；不能仅凭 `_headers` 宣称线上全部资源会重新验证。资源标识仍须覆盖完整依赖闭包并随内容更新，实际缓存响应头在上线记录中逐资源保留。
 
