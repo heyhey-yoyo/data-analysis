@@ -5,15 +5,18 @@
 ## 主要功能
 
 **描述统计**
+
 均值、标准差、中位数、四分位数、峰度、偏度、标准误差。
 
 **正态性检验**
+
 - Shapiro–Francia W′
 - Anderson–Darling
 - D'Agostino–Pearson
 - Jarque–Bera
 
 **方差齐性检验**
+
 - Bartlett（正态数据）
 - Levene（均值中心）
 - Brown–Forsythe（中位数中心，稳健）
@@ -21,14 +24,17 @@
 自动推荐在各组正态性诊断均未提示偏离、每组 n ≥ 5 且重复值不多时选择 Bartlett；其他情况选择 Brown–Forsythe。
 
 **参数检验**
+
 - 独立样本 t 检验（含 Welch 校正）
 - 单因素方差分析（ANOVA）
 
 **非参数检验**
+
 - Mann–Whitney U 检验
 - Kruskal–Wallis 检验
 
 **事后多重比较**
+
 - Tukey–Kramer（等方差）
 - Games–Howell（异方差）
 - Fisher LSD（受保护）
@@ -37,6 +43,7 @@
 - 多重校正：Bonferroni、Holm、Šidák、Benjamini–Hochberg（FDR）
 
 **其他分析方法**
+
 - 相关分析（Pearson / Spearman），逐对报告有效样本量 N
 - 精确置换检验（精确枚举）
 - Fisher 精确检验与卡方检验
@@ -112,6 +119,6 @@ MIT
 >
 > - 新增分析方法 → 在 README 的分析方法列表中补充说明
 > - 修改统计算法 → 同时更新 AGENTS.md 中的算法描述与 FIXES.md
-> - 新增/删除文件 → 更新两份文档中的文件清单
+> - 新增/删除文件 → 更新 AGENTS.md 中的文件清单
 > - 修改部署方式 → 同步更新本文部署章节
 > - 保持 **README 面向人类用户**，**AGENTS.md 面向 AI 代理**，两份文件不可互相替代
