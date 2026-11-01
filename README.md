@@ -6,7 +6,7 @@
 
 **描述统计**
 
-均值、标准差、中位数、四分位数、峰度、偏度、标准误差。
+均值、标准差、中位数、四分位数、最小值与最大值；偏度和峰度仅用于部分正态性诊断，标准误差不在界面或主结果导出中单独展示。
 
 **正态性检验**
 
@@ -59,7 +59,7 @@
 
 ## 数据与隐私
 
-所有计算在浏览器本地完成，数据不会上传到任何服务器。录入的数据与分析状态仅保存在你自己浏览器的 `localStorage` 中；清理浏览器网站数据或更换设备可能导致数据丢失，重要结果请及时导出 CSV，并另行保留输入原始文件；结果 CSV 不能恢复整次分析。CSV/TSV 最多支持 100000 行数据（不含表头），有表头与无表头导入均在超限时明确报错。
+所有计算在浏览器本地完成，数据不会上传到任何服务器。录入的数据与分析状态仅保存在你自己浏览器的 `localStorage` 中；清理浏览器网站数据或更换设备可能导致数据丢失，重要结果请及时导出 CSV，并另行保留输入原始文件；结果 CSV 不能恢复整次分析。文件上传和表格解析按首行为字段名处理，单次最多导入 100000 行数据（不含表头），超限会明确报错；无表头数据请先补一行字段名，或粘贴到既有表格区域按数据行处理。
 
 ## 本地运行
 
@@ -83,17 +83,18 @@ python -m http.server 8080
 index.html
 styles.css
 src/
+assets/project-mark.svg
 _headers        # Cloudflare Pages 推荐
 ```
 
 **Cloudflare Pages**
 
-实际部署于 Pages 项目 `tools-data-analysis`（注意：Cloudflare 项目名与仓库名不同），已接入 Git 集成，推送 `main` 分支自动构建部署。首次接入配置：
+实际部署于 Pages 项目 `tools-data-analysis`（注意：Cloudflare 项目名与仓库名不同）；仓库按 Git 集成配置，推送 `main` 后由平台构建部署，实际接入状态以 Cloudflare Dashboard 为准。首次接入配置：
 
 1. 将仓库内容上传或提交到 Git。
 2. Framework preset 选择 `None`。
-3. Build command 留空。
-4. Build output directory 使用 `/`（仓库根目录）。
+3. `Build command` 留空。
+4. `Build output directory` 使用 `/`（仓库根目录）。
 
 **GitHub Pages / 任意静态服务器**
 
